@@ -24,7 +24,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
       />
 
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-md bg-[#FAF8F5] border-l border-[#E6E0D6] shadow-2xl flex flex-col">
+        <div className="animate-in slide-in-from-right duration-300 w-screen max-w-md bg-[#FAF8F5] border-l border-[#E6E0D6] shadow-2xl flex flex-col">
           {/* Top Header */}
           <div className="p-4 border-b border-[#E6E0D6] flex items-center justify-between bg-white">
             <div className="flex items-center gap-2">

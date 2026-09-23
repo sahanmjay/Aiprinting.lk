@@ -66,3 +66,50 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #0F1B2D;
 }
+
+/* ---------- Motion ---------- */
+/* Enter animations (tailwindcss-animate compatible names; pair with duration-*) */
+@keyframes enter {
+  from {
+    opacity: var(--enter-opacity, 1);
+    transform: translate3d(var(--enter-x, 0), var(--enter-y, 0), 0) scale(var(--enter-scale, 1));
+  }
+}
+.animate-in {
+  animation: enter var(--tw-duration, 200ms) cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+.fade-in { --enter-opacity: 0; }
+.zoom-in { --enter-scale: 0.6; }
+.slide-in-from-top { --enter-y: -0.75rem; }
+.slide-in-from-top-1 { --enter-y: -0.25rem; }
+.slide-in-from-bottom-2 { --enter-y: 0.5rem; }
+.slide-in-from-bottom-4 { --enter-y: 1rem; }
+.slide-in-from-right { --enter-x: 100%; }
+
+/* Scroll reveal: native scroll-driven animation, no JS. Browsers without support just show content. */
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: enter linear backwards;
+    animation-timeline: view();
+    animation-range: entry 0% entry 35%;
+    --enter-opacity: 0;
+    --enter-y: 2rem;
+  }
+}
+
+@layer base {
+  button:not(:disabled) {
+    transition: transform 120ms ease;
+  }
+  button:not(:disabled):active {
+    transform: scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

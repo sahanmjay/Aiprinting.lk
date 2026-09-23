@@ -35,7 +35,7 @@ export const HomePage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             {/* Left Copy */}
-            <div className="lg:col-span-7 space-y-6 text-left">
+            <div className="lg:col-span-7 space-y-6 text-left animate-in fade-in slide-in-from-bottom-4 duration-700">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-[#1A2D4A] border border-[#2A436B] text-xs font-semibold tracking-wide text-slate-200">
                 <RegistrationMark size={16} />
                 <span>Commercial Printing Facility · Boralesgamuwa, Sri Lanka</span>
@@ -55,10 +55,10 @@ export const HomePage: React.FC = () => {
               <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <Link
                   to="/product/double-sided-visiting-cards"
-                  className="px-6 py-3.5 bg-[#D6342C] hover:bg-[#B8251E] text-white font-bold text-sm rounded shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                  className="px-6 py-3.5 bg-[#D6342C] hover:bg-[#B8251E] text-white font-bold text-sm rounded shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 group"
                 >
                   <span>Order Visiting Cards</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Link>
 
                 <Link
@@ -97,7 +97,7 @@ export const HomePage: React.FC = () => {
             </div>
 
             {/* Right Visual Card Showcase */}
-            <div className="lg:col-span-5">
+            <div className="lg:col-span-5 animate-in fade-in slide-in-from-bottom-4 duration-700 [animation-delay:150ms]">
               <div className="relative mx-auto max-w-md bg-[#FAF8F5] text-[#2B2B2B] p-6 rounded-lg shadow-2xl border border-white/20 space-y-4">
                 <div className="flex items-center justify-between border-b border-[#E6E0D6] pb-3">
                   <div className="flex items-center gap-2">
@@ -155,10 +155,10 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 2. THREE VALUE PROPS */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6">
+      <section className="reveal max-w-7xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Prop 1 */}
-          <div className="bg-white p-6 rounded border border-[#E6E0D6] shadow-xs hover:shadow-md transition-shadow space-y-3">
+          <div className="bg-white p-6 rounded border border-[#E6E0D6] shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-300 space-y-3">
             <div className="w-11 h-11 rounded bg-[#0F1B2D] text-white flex items-center justify-center">
               <ShieldCheck className="w-6 h-6 text-[#D6342C]" />
             </div>
@@ -171,7 +171,7 @@ export const HomePage: React.FC = () => {
           </div>
 
           {/* Prop 2 */}
-          <div className="bg-white p-6 rounded border border-[#E6E0D6] shadow-xs hover:shadow-md transition-shadow space-y-3">
+          <div className="bg-white p-6 rounded border border-[#E6E0D6] shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-300 space-y-3">
             <div className="w-11 h-11 rounded bg-[#0F1B2D] text-white flex items-center justify-center">
               <Truck className="w-6 h-6 text-white" />
             </div>
@@ -184,7 +184,7 @@ export const HomePage: React.FC = () => {
           </div>
 
           {/* Prop 3 */}
-          <div className="bg-white p-6 rounded border border-[#E6E0D6] shadow-xs hover:shadow-md transition-shadow space-y-3">
+          <div className="bg-white p-6 rounded border border-[#E6E0D6] shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-300 space-y-3">
             <div className="w-11 h-11 rounded bg-[#0F1B2D] text-white flex items-center justify-center">
               <Users className="w-6 h-6 text-white" />
             </div>
@@ -199,7 +199,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 3. SHOP BY CATEGORY (10 TILES) */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
+      <section className="reveal max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
         <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-[#E6E0D6] pb-4">
           <div>
             <div className="text-xs font-bold uppercase tracking-widest text-[#D6342C] mb-1">
@@ -223,7 +223,7 @@ export const HomePage: React.FC = () => {
             <Link
               key={cat.id}
               to={`/shop/${cat.slug}`}
-              className="group bg-white rounded border border-[#E6E0D6] overflow-hidden hover:border-[#0F1B2D] hover:shadow-md transition-all flex flex-col"
+              className="group bg-white rounded border border-[#E6E0D6] overflow-hidden hover:border-[#0F1B2D] hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col"
             >
               <div className="aspect-4/3 overflow-hidden bg-slate-100">
                 <img
@@ -253,7 +253,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 4. FEATURED PRODUCTS SECTION */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
+      <section className="reveal max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
         <div className="flex justify-between items-end border-b border-[#E6E0D6] pb-4">
           <div>
             <div className="text-xs font-bold uppercase tracking-widest text-[#D6342C] mb-1 flex items-center gap-1">
@@ -270,7 +270,7 @@ export const HomePage: React.FC = () => {
           {featuredProducts.map((prod) => (
             <div
               key={prod.id}
-              className="bg-white rounded border border-[#E6E0D6] overflow-hidden hover:shadow-lg transition-all flex flex-col justify-between group"
+              className="bg-white rounded border border-[#E6E0D6] overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group"
             >
               <div>
                 <div className="relative aspect-4/3 bg-slate-100 overflow-hidden">
@@ -321,7 +321,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 5. HOW IT WORKS (4 STEPS) */}
-      <section className="bg-white py-16 border-y border-[#E6E0D6]">
+      <section className="reveal bg-white py-16 border-y border-[#E6E0D6]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-12">
           <div className="text-center max-w-xl mx-auto space-y-2">
             <div className="text-xs font-bold uppercase tracking-widest text-[#D6342C]">
@@ -337,7 +337,7 @@ export const HomePage: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 relative">
             {/* Step 1 */}
-            <div className="p-6 rounded border border-[#E6E0D6] bg-[#FAF8F5] relative space-y-3">
+            <div className="p-6 rounded border border-[#E6E0D6] bg-[#FAF8F5] relative space-y-3 hover:border-[#0F1B2D] hover:-translate-y-1 transition-all duration-300">
               <div className="w-10 h-10 rounded-full bg-[#0F1B2D] text-white font-bold text-sm flex items-center justify-center">
                 01
               </div>
@@ -348,7 +348,7 @@ export const HomePage: React.FC = () => {
             </div>
 
             {/* Step 2 */}
-            <div className="p-6 rounded border border-[#E6E0D6] bg-[#FAF8F5] relative space-y-3">
+            <div className="p-6 rounded border border-[#E6E0D6] bg-[#FAF8F5] relative space-y-3 hover:border-[#0F1B2D] hover:-translate-y-1 transition-all duration-300">
               <div className="w-10 h-10 rounded-full bg-[#0F1B2D] text-white font-bold text-sm flex items-center justify-center">
                 02
               </div>
@@ -359,7 +359,7 @@ export const HomePage: React.FC = () => {
             </div>
 
             {/* Step 3 */}
-            <div className="p-6 rounded border border-[#E6E0D6] bg-[#FAF8F5] relative space-y-3">
+            <div className="p-6 rounded border border-[#E6E0D6] bg-[#FAF8F5] relative space-y-3 hover:border-[#0F1B2D] hover:-translate-y-1 transition-all duration-300">
               <div className="w-10 h-10 rounded-full bg-[#0F1B2D] text-white font-bold text-sm flex items-center justify-center">
                 03
               </div>
@@ -370,7 +370,7 @@ export const HomePage: React.FC = () => {
             </div>
 
             {/* Step 4 */}
-            <div className="p-6 rounded border border-[#E6E0D6] bg-[#FAF8F5] relative space-y-3">
+            <div className="p-6 rounded border border-[#E6E0D6] bg-[#FAF8F5] relative space-y-3 hover:border-[#0F1B2D] hover:-translate-y-1 transition-all duration-300">
               <div className="w-10 h-10 rounded-full bg-[#D6342C] text-white font-bold text-sm flex items-center justify-center">
                 04
               </div>
@@ -384,7 +384,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 6. TESTIMONIALS */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
+      <section className="reveal max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
         <div className="text-center max-w-xl mx-auto space-y-2">
           <div className="text-xs font-bold uppercase tracking-widest text-[#D6342C]">
             Verified Client Reviews
@@ -426,7 +426,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 7. CLIENT LOGO WALL */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
+      <section className="reveal max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
         <div className="text-center">
           <span className="text-xs font-bold uppercase tracking-widest text-slate-400">
             Trusted by Leading Organizations Across Sri Lanka
@@ -446,7 +446,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 8. CTA BAND */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6">
+      <section className="reveal max-w-7xl mx-auto px-4 sm:px-6">
         <div className="bg-[#0F1B2D] text-white rounded-lg p-8 sm:p-12 relative overflow-hidden flex flex-col lg:flex-row items-center justify-between gap-8">
           <div className="absolute right-0 top-0 opacity-10 pointer-events-none">
             <RegistrationMark size={240} />
