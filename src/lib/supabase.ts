@@ -1,11 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder-project.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key';
-
-export const isSupabaseConfigured = Boolean(
-  import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+// The anon key is public by design (it ships in the browser bundle); Row Level Security in
+// supabase/schema.sql is what protects the data. Env vars override these defaults.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://enrdcnhpvpcoiipkfaad.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVucmRjbmhwdnBjb2lpcGtmYWFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNjgwODUsImV4cCI6MjEwNTc0NDA4NX0.wJxXwCPSLC2B5V6pe-jEKVK-7LNotFC1mOv0OV26wpY';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
