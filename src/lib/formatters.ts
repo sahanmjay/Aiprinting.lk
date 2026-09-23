@@ -22,20 +22,20 @@ export function formatLKRCompact(amount: number): string {
 }
 
 /**
- * Generates human readable order number e.g. AIP-2026-0142
+ * Generates human readable order number e.g. AIP-2026-014218
  */
 export function generateOrderNumber(): string {
   const year = new Date().getFullYear();
-  const randomNum = Math.floor(1000 + Math.random() * 9000);
+  const randomNum = Math.floor(100000 + Math.random() * 900000);
   return `AIP-${year}-${randomNum}`;
 }
 
 /**
- * Generates human readable quote number e.g. QT-2026-0089
+ * Generates human readable quote number e.g. QT-2026-008921
  */
 export function generateQuoteNumber(): string {
   const year = new Date().getFullYear();
-  const randomNum = Math.floor(1000 + Math.random() * 9000);
+  const randomNum = Math.floor(100000 + Math.random() * 900000);
   return `QT-${year}-${randomNum}`;
 }
 

@@ -121,7 +121,7 @@ export const SEED_CATEGORIES: Category[] = [
     slug: 'certificates',
     name: 'Certificates',
     description: 'Official diploma, award, and recognition certificates on thick textured parchment and laid stock.',
-    imageUrl: 'https://images.unsplash.com/photo-1589330694653-dad6bc01cf0f?auto=format&fit=crop&w=600&q=80',
+    imageUrl: 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?auto=format&fit=crop&w=600&q=80',
     sortOrder: 8,
     isActive: true,
   },
@@ -222,14 +222,6 @@ export const SEED_PRODUCTS: Product[] = [
         altText: 'Double Sided Visiting Cards stacked on paper texture',
         sortOrder: 1,
         isPrimary: true,
-      },
-      {
-        id: 'img-vc-d2',
-        productId: 'prod-vc-double',
-        imageUrl: 'https://images.unsplash.com/photo-1589330694653-dad6bc01cf0f?auto=format&fit=crop&w=1200&q=85',
-        altText: 'Premium Business card mockups front and back',
-        sortOrder: 2,
-        isPrimary: false,
       },
     ],
     optionGroups: [
@@ -653,7 +645,7 @@ export const SEED_PRODUCTS: Product[] = [
       {
         id: 'img-cert-1',
         productId: 'prod-certificates',
-        imageUrl: 'https://images.unsplash.com/photo-1589330694653-dad6bc01cf0f?auto=format&fit=crop&w=1200&q=85',
+        imageUrl: 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?auto=format&fit=crop&w=1200&q=85',
         altText: 'Official award and recognition certificates',
         sortOrder: 1,
         isPrimary: true,

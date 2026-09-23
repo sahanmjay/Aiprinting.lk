@@ -8,7 +8,6 @@ import {
   ContactMessage,
   SiteSettings,
   PriceMatrixCell,
-  OrderStatus,
   QuoteStatus,
 } from '../types';
 import {
@@ -20,6 +19,7 @@ import {
   VISITING_CARD_QUANTITIES,
 } from '../data/seedData';
 import { generateOrderNumber, generateQuoteNumber } from '../lib/formatters';
+import { supabase, toRow, fromRow } from '../lib/supabase';
 
 interface StoreContextType {
   products: Product[];
@@ -42,17 +42,17 @@ interface StoreContextType {
 
   // Ordering
   createOrder: (orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>) => Promise<Order>;
-  updateOrderStatus: (orderId: string, status: OrderStatus) => void;
+  updateOrder: (orderId: string, changes: Partial<Pick<Order, 'orderStatus' | 'paymentStatus'>>) => Promise<void>;
   getOrderById: (orderId: string) => Order | undefined;
-  getOrderByNumber: (orderNumber: string) => Order | undefined;
+  trackOrder: (orderNumber: string, phone: string) => Promise<Order | null>;
 
   // Quotes
   createQuote: (quoteData: Omit<Quotation, 'id' | 'quoteNumber' | 'status' | 'createdAt'>) => Promise<Quotation>;
-  updateQuoteStatus: (quoteId: string, status: QuoteStatus, adminNotes?: string, quotedAmount?: number) => void;
+  updateQuoteStatus: (quoteId: string, status: QuoteStatus, adminNotes?: string, quotedAmount?: number) => Promise<void>;
 
   // Contact
   sendContactMessage: (msg: Omit<ContactMessage, 'id' | 'isRead' | 'createdAt'>) => Promise<void>;
-  markMessageRead: (msgId: string) => void;
+  markMessageRead: (msgId: string) => Promise<void>;
 
   // Price Grid Admin Features
   getPriceForOptions: (productId: string, paperId: string, qtyId?: string) => number;
@@ -67,140 +67,102 @@ interface StoreContextType {
   deleteProduct: (productId: string) => void;
   duplicateProduct: (productId: string) => Product | undefined;
   updateSiteSettings: (newSettings: Partial<SiteSettings>) => void;
-  loginAdmin: (password: string) => boolean;
-  logoutAdmin: () => void;
+  loginAdmin: (username: string, password: string) => Promise<string | null>; // null = success, else error message
+  logoutAdmin: () => Promise<void>;
+  refreshAdminData: () => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
+// Bump when SEED_PRODUCTS changes so browsers drop their stale saved copy.
+const PRODUCTS_KEY = 'aiprint_products_v2';
+
+// Corrupt or missing localStorage must never blank the whole site.
+function load<T>(key: string, fallback: () => T): T {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : fallback();
+  } catch {
+    return fallback();
+  }
+}
+
+// A full or blocked localStorage (e.g. large artwork previews) must not crash the app.
+function save(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.warn(`Could not save ${key} to localStorage`, e);
+  }
+}
+
+// Supabase Auth needs an email, so admin usernames map to an internal address (no mail is ever sent).
+const ADMIN_EMAIL_DOMAIN = 'admin.aiprintingsolutions.com';
+
+// Postgres unique violation — a random order/quote number collided, so retry with a new one.
+const UNIQUE_VIOLATION = '23505';
+
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 1. Initial State from localStorage or Seeds
-  const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('aiprint_products');
-    return saved ? JSON.parse(saved) : SEED_PRODUCTS;
-  });
+  const [products, setProducts] = useState<Product[]>(() => load(PRODUCTS_KEY, () => SEED_PRODUCTS));
 
   const [categories] = useState<Category[]>(SEED_CATEGORIES);
 
-  const [siteSettings, setSiteSettings] = useState<SiteSettings>(() => {
-    const saved = localStorage.getItem('aiprint_settings');
-    return saved ? JSON.parse(saved) : DEFAULT_SITE_SETTINGS;
-  });
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>(() => load('aiprint_settings', () => DEFAULT_SITE_SETTINGS));
 
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    const saved = localStorage.getItem('aiprint_cart');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [cart, setCart] = useState<CartItem[]>(() => load('aiprint_cart', () => []));
 
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('aiprint_orders');
-    if (saved) return JSON.parse(saved);
-    // Initial dummy order for demonstration
-    return [
-      {
-        id: 'ord-demo-1',
-        orderNumber: 'AIP-2026-0042',
-        customerName: 'Roshan Samarajeewa',
-        customerEmail: 'roshan.s@example.com',
-        customerPhone: '077 412 9087',
-        deliveryAddress: '45/2 Havelock Road',
-        city: 'Colombo 05',
-        district: 'Colombo',
-        subtotal: 4800,
-        deliveryFee: 400,
-        addonTotal: 0,
-        total: 5200,
-        paymentMethod: 'payhere',
-        paymentStatus: 'paid',
-        orderStatus: 'in_production',
-        createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-        updatedAt: new Date().toISOString(),
-        items: [
-          {
-            id: 'item-demo-1',
-            productId: 'prod-vc-double',
-            product: SEED_PRODUCTS[0],
-            selectedOptions: [
-              { groupName: 'Paper Stock', valueLabel: '300gsm Art Board (Gloss Finish)', valueId: 'paper-300-art' },
-              { groupName: 'Quantity', valueLabel: '500 Cards', valueId: 'qty-500' },
-            ],
-            quantityCount: 500,
-            unitPrice: 9.6,
-            itemPrice: 4800,
-            selectedAddons: [],
-            artworkType: 'own',
-            artworkFiles: [{ slot: 1, fileName: 'front-artwork-final.pdf', fileSize: 1240000, fileType: 'application/pdf' }],
-            lineTotal: 4800,
-          },
-        ],
-      },
-    ];
-  });
+  // The customer's own orders (for the confirmation page) stay in this browser
+  const [orders, setOrders] = useState<Order[]>(() => load('aiprint_orders', () => []));
 
-  const [quotations, setQuotations] = useState<Quotation[]>(() => {
-    const saved = localStorage.getItem('aiprint_quotes');
-    return saved
-      ? JSON.parse(saved)
-      : [
-          {
-            id: 'qt-demo-1',
-            quoteNumber: 'QT-2026-0012',
-            name: 'Malik Jayawardena',
-            email: 'malik@jayaprint.lk',
-            phone: '071 889 2311',
-            company: 'Lanka Logistics Ltd',
-            productType: 'Carbonized (NCR) Bill Books',
-            quantity: '150 Books (3-part, sequential numbering from 5001)',
-            specifications: 'Custom SVAT invoice format, black and red ink on white/pink/yellow carbonless paper.',
-            status: 'new',
-            createdAt: new Date().toISOString(),
-          },
-        ];
-  });
-
-  const [contactMessages, setContactMessages] = useState<ContactMessage[]>(() => {
-    const saved = localStorage.getItem('aiprint_messages');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // Admin data lives in Supabase
+  const [adminOrders, setAdminOrders] = useState<Order[]>([]);
+  const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [contactMessages, setContactMessages] = useState<ContactMessage[]>([]);
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
 
   // Price matrix keyed by productId
-  const [priceMatrix, setPriceMatrix] = useState<Record<string, PriceMatrixCell[]>>(() => {
-    const saved = localStorage.getItem('aiprint_price_matrix');
-    if (saved) return JSON.parse(saved);
-    return {
-      'prod-vc-double': generateCardPriceMatrix('prod-vc-double', true),
-      'prod-vc-single': generateCardPriceMatrix('prod-vc-single', false),
-    };
-  });
-
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
-    return sessionStorage.getItem('aiprint_admin_auth') === 'true';
-  });
+  const [priceMatrix, setPriceMatrix] = useState<Record<string, PriceMatrixCell[]>>(() => load('aiprint_price_matrix', () => ({
+    'prod-vc-double': generateCardPriceMatrix('prod-vc-double', true),
+    'prod-vc-single': generateCardPriceMatrix('prod-vc-single', false),
+  })));
 
   // Persist changes
+  useEffect(() => save('aiprint_cart', cart), [cart]);
+  useEffect(() => save('aiprint_orders', orders), [orders]);
+  useEffect(() => save('aiprint_price_matrix', priceMatrix), [priceMatrix]);
+  useEffect(() => save('aiprint_settings', siteSettings), [siteSettings]);
+  useEffect(() => save(PRODUCTS_KEY, products), [products]);
+
+  // Admin session: a Supabase Auth user who is listed in admin_users
   useEffect(() => {
-    localStorage.setItem('aiprint_cart', JSON.stringify(cart));
-  }, [cart]);
+    const check = async () => {
+      const { data } = await supabase.rpc('is_admin');
+      setIsAdminLoggedIn(data === true);
+    };
+    check();
+    // Supabase warns against awaiting its own calls inside this callback, so defer the check.
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      setTimeout(check, 0);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  const refreshAdminData = async () => {
+    const [o, q, m] = await Promise.all([
+      supabase.from('orders').select('*').order('created_at', { ascending: false }),
+      supabase.from('quotations').select('*').order('created_at', { ascending: false }),
+      supabase.from('contact_messages').select('*').order('created_at', { ascending: false }),
+    ]);
+    for (const res of [o, q, m]) if (res.error) console.error('Admin data load failed:', res.error);
+    setAdminOrders((o.data ?? []).map((row) => fromRow<Order>(row)));
+    setQuotations((q.data ?? []).map((row) => fromRow<Quotation>(row)));
+    setContactMessages((m.data ?? []).map((row) => fromRow<ContactMessage>(row)));
+  };
 
   useEffect(() => {
-    localStorage.setItem('aiprint_orders', JSON.stringify(orders));
-  }, [orders]);
-
-  useEffect(() => {
-    localStorage.setItem('aiprint_quotes', JSON.stringify(quotations));
-  }, [quotations]);
-
-  useEffect(() => {
-    localStorage.setItem('aiprint_price_matrix', JSON.stringify(priceMatrix));
-  }, [priceMatrix]);
-
-  useEffect(() => {
-    localStorage.setItem('aiprint_settings', JSON.stringify(siteSettings));
-  }, [siteSettings]);
-
-  useEffect(() => {
-    localStorage.setItem('aiprint_products', JSON.stringify(products));
-  }, [products]);
+    if (isAdminLoggedIn) refreshAdminData();
+  }, [isAdminLoggedIn]);
 
   // Cart helper functions
   const addToCart = (item: CartItem) => {
@@ -223,27 +185,51 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const createOrder = async (
     orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>
   ): Promise<Order> => {
+    const now = new Date().toISOString();
+    // Strip in-browser image previews; the real files are already in Storage (storagePath).
+    const items = orderData.items.map((item) => ({
+      ...item,
+      artworkFiles: item.artworkFiles.map(({ previewUrl: _p, dataUrl: _d, ...file }) => file),
+    }));
     const newOrder: Order = {
       ...orderData,
-      id: `ord-${Date.now()}`,
-      orderNumber: generateOrderNumber(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      items,
+      id: `ord-${crypto.randomUUID()}`,
+      orderNumber: '',
+      createdAt: now,
+      updatedAt: now,
     };
+    for (let attempt = 1; ; attempt++) {
+      newOrder.orderNumber = generateOrderNumber();
+      const { error } = await supabase.from('orders').insert(toRow(newOrder));
+      if (!error) break;
+      if (error.code !== UNIQUE_VIOLATION || attempt === 3) throw error;
+    }
     setOrders((prev) => [newOrder, ...prev]);
     clearCart();
     return newOrder;
   };
 
-  const updateOrderStatus = (orderId: string, status: OrderStatus) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, orderStatus: status, updatedAt: new Date().toISOString() } : o))
-    );
+  const updateOrder = async (orderId: string, changes: Partial<Pick<Order, 'orderStatus' | 'paymentStatus'>>) => {
+    const patch = { ...changes, updatedAt: new Date().toISOString() };
+    const { error } = await supabase.from('orders').update(toRow(patch)).eq('id', orderId);
+    if (error) {
+      alert(`Could not update order: ${error.message}`);
+      return;
+    }
+    setAdminOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...patch } : o)));
   };
 
   const getOrderById = (orderId: string) => orders.find((o) => o.id === orderId);
-  const getOrderByNumber = (orderNumber: string) =>
-    orders.find((o) => o.orderNumber.toLowerCase() === orderNumber.toLowerCase().trim());
+
+  const trackOrder = async (orderNumber: string, phone: string): Promise<Order | null> => {
+    const { data, error } = await supabase.rpc('track_order', {
+      p_order_number: orderNumber,
+      p_phone: phone,
+    });
+    if (error) throw error;
+    return data?.[0] ? fromRow<Order>(data[0]) : null;
+  };
 
   // Quotations
   const createQuote = async (
@@ -251,47 +237,57 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   ): Promise<Quotation> => {
     const newQuote: Quotation = {
       ...quoteData,
-      id: `quote-${Date.now()}`,
-      quoteNumber: generateQuoteNumber(),
+      id: `quote-${crypto.randomUUID()}`,
+      quoteNumber: '',
       status: 'new',
       createdAt: new Date().toISOString(),
     };
-    setQuotations((prev) => [newQuote, ...prev]);
+    for (let attempt = 1; ; attempt++) {
+      newQuote.quoteNumber = generateQuoteNumber();
+      const { error } = await supabase.from('quotations').insert(toRow(newQuote));
+      if (!error) break;
+      if (error.code !== UNIQUE_VIOLATION || attempt === 3) throw error;
+    }
     return newQuote;
   };
 
-  const updateQuoteStatus = (
+  const updateQuoteStatus = async (
     quoteId: string,
     status: QuoteStatus,
     adminNotes?: string,
     quotedAmount?: number
   ) => {
-    setQuotations((prev) =>
-      prev.map((q) =>
-        q.id === quoteId
-          ? {
-              ...q,
-              status,
-              ...(adminNotes !== undefined ? { adminNotes } : {}),
-              ...(quotedAmount !== undefined ? { quotedAmount } : {}),
-            }
-          : q
-      )
-    );
+    const changes = {
+      status,
+      ...(adminNotes !== undefined ? { adminNotes } : {}),
+      ...(quotedAmount !== undefined ? { quotedAmount } : {}),
+    };
+    const { error } = await supabase.from('quotations').update(toRow(changes)).eq('id', quoteId);
+    if (error) {
+      alert(`Could not update quote: ${error.message}`);
+      return;
+    }
+    setQuotations((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...changes } : q)));
   };
 
   // Contact
   const sendContactMessage = async (msg: Omit<ContactMessage, 'id' | 'isRead' | 'createdAt'>) => {
     const newMsg: ContactMessage = {
       ...msg,
-      id: `msg-${Date.now()}`,
+      id: `msg-${crypto.randomUUID()}`,
       isRead: false,
       createdAt: new Date().toISOString(),
     };
-    setContactMessages((prev) => [newMsg, ...prev]);
+    const { error } = await supabase.from('contact_messages').insert(toRow(newMsg));
+    if (error) throw error;
   };
 
-  const markMessageRead = (msgId: string) => {
+  const markMessageRead = async (msgId: string) => {
+    const { error } = await supabase.from('contact_messages').update({ is_read: true }).eq('id', msgId);
+    if (error) {
+      alert(`Could not update message: ${error.message}`);
+      return;
+    }
     setContactMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, isRead: true } : m)));
   };
 
@@ -419,19 +415,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setSiteSettings((prev) => ({ ...prev, ...newSettings }));
   };
 
-  const loginAdmin = (password: string): boolean => {
-    // Default master password for initial administrative setup
-    if (password === 'admin123' || password === 'aiprint2026') {
-      setIsAdminLoggedIn(true);
-      sessionStorage.setItem('aiprint_admin_auth', 'true');
-      return true;
+  const loginAdmin = async (username: string, password: string): Promise<string | null> => {
+    const email = `${username.trim().toLowerCase()}@${ADMIN_EMAIL_DOMAIN}`;
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return error.message === 'Invalid login credentials' ? 'Wrong username or password.' : error.message;
+    const { data: isAdmin, error: rpcError } = await supabase.rpc('is_admin');
+    if (rpcError || isAdmin !== true) {
+      await supabase.auth.signOut();
+      return rpcError
+        ? `Signed in, but the admin check failed (${rpcError.message}). Has supabase/schema.sql been run?`
+        : 'This account is not an administrator.';
     }
-    return false;
+    setIsAdminLoggedIn(true);
+    return null;
   };
 
-  const logoutAdmin = () => {
+  const logoutAdmin = async () => {
+    await supabase.auth.signOut();
     setIsAdminLoggedIn(false);
-    sessionStorage.removeItem('aiprint_admin_auth');
+    setAdminOrders([]);
+    setQuotations([]);
+    setContactMessages([]);
   };
 
   return (
@@ -441,7 +445,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         categories,
         siteSettings,
         cart,
-        orders,
+        orders: isAdminLoggedIn ? adminOrders : orders,
         quotations,
         contactMessages,
         priceMatrix,
@@ -453,9 +457,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         cartSubtotal,
         cartTotal,
         createOrder,
-        updateOrderStatus,
+        updateOrder,
         getOrderById,
-        getOrderByNumber,
+        trackOrder,
         createQuote,
         updateQuoteStatus,
         sendContactMessage,
@@ -472,6 +476,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateSiteSettings,
         loginAdmin,
         logoutAdmin,
+        refreshAdminData,
       }}
     >
       {children}

@@ -5,17 +5,30 @@ import { formatLKR } from '../lib/formatters';
 import { Order } from '../types';
 
 export const AccountPage: React.FC = () => {
-  const { orders, getOrderByNumber } = useStore();
+  const { orders, trackOrder } = useStore();
   const [searchQuery, setSearchQuery] = useState('');
+  const [phoneQuery, setPhoneQuery] = useState('');
   const [searchedOrder, setSearchedOrder] = useState<Order | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const lookup = async (orderNumber: string, phone: string) => {
+    setIsSearching(true);
+    try {
+      setSearchedOrder(await trackOrder(orderNumber, phone));
+    } catch (err) {
+      console.error('Order lookup failed:', err);
+      setSearchedOrder(null);
+    } finally {
+      setHasSearched(true);
+      setIsSearching(false);
+    }
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim()) return;
-    setHasSearched(true);
-    const found = getOrderByNumber(searchQuery.trim());
-    setSearchedOrder(found || null);
+    if (!searchQuery.trim() || !phoneQuery.trim()) return;
+    lookup(searchQuery.trim(), phoneQuery.trim());
   };
 
   const getStatusBadge = (status: string) => {
@@ -48,28 +61,36 @@ export const AccountPage: React.FC = () => {
           Track Your Print Order
         </h1>
         <p className="text-xs text-slate-500">
-          Enter your human-readable order number (e.g. AIP-2026-0042) to view production status and dispatch details.
+          Enter your order number and the phone number used at checkout to view production status and dispatch details.
         </p>
       </div>
 
       {/* Search Bar */}
       <div className="bg-white p-6 rounded-lg border border-[#E6E0D6] shadow-xs max-w-xl">
-        <form onSubmit={handleSearch} className="flex gap-2">
+        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-grow">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="e.g. AIP-2026-0042"
+              placeholder="e.g. AIP-2026-014218"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2.5 text-xs bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden font-mono uppercase"
             />
           </div>
+          <input
+            type="tel"
+            placeholder="Phone number"
+            value={phoneQuery}
+            onChange={(e) => setPhoneQuery(e.target.value)}
+            className="sm:w-40 px-3 py-2.5 text-xs bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden"
+          />
           <button
             type="submit"
-            className="px-5 py-2.5 bg-[#0F1B2D] hover:bg-[#182A45] text-white text-xs font-bold rounded transition-colors"
+            disabled={isSearching}
+            className="px-5 py-2.5 bg-[#0F1B2D] hover:bg-[#182A45] text-white text-xs font-bold rounded transition-colors disabled:opacity-60"
           >
-            Track Status
+            {isSearching ? 'Searching…' : 'Track Status'}
           </button>
         </form>
       </div>
@@ -154,8 +175,8 @@ export const AccountPage: React.FC = () => {
                 key={o.id}
                 onClick={() => {
                   setSearchQuery(o.orderNumber);
-                  setSearchedOrder(o);
-                  setHasSearched(true);
+                  setPhoneQuery(o.customerPhone);
+                  lookup(o.orderNumber, o.customerPhone);
                 }}
                 className="bg-white p-4 rounded border border-[#E6E0D6] hover:border-[#0F1B2D] cursor-pointer transition-colors flex justify-between items-center text-xs"
               >

@@ -11,7 +11,9 @@ export const Layout: React.FC = () => {
   const { pathname } = useLocation();
 
   // New page starts at the top
-  useEffect(() => window.scrollTo(0, 0), [pathname]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAF8F5] text-[#2B2B2B] relative selection:bg-[#D6342C] selection:text-white">

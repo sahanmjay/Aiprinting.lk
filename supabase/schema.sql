@@ -213,8 +213,13 @@ VALUES
     ('quote-attachments', 'quote-attachments', false, 52428800) -- 50MB limit
 ON CONFLICT (id) DO NOTHING;
 
+-- Columns added after the first release (safe to re-run on an existing database)
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS bank_slip_name TEXT;
+ALTER TABLE public.quotations ADD COLUMN IF NOT EXISTS attachment_name TEXT;
+
 -- ==============================================================================
--- ROW LEVEL SECURITY (RLS) POLICIES
+-- ROW LEVEL SECURITY (RLS) POLICIES — this whole section is safe to re-run
 -- ==============================================================================
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
@@ -233,7 +238,33 @@ ALTER TABLE public.client_logos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.site_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
 
--- 1. PUBLIC READ POLICIES
+-- Admin check. SECURITY DEFINER so it can read admin_users regardless of that table's RLS.
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+    SELECT EXISTS (SELECT 1 FROM public.admin_users WHERE id = auth.uid());
+$$;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated;
+
+-- Customer order tracking: needs the order number AND the phone used at checkout.
+CREATE OR REPLACE FUNCTION public.track_order(p_order_number TEXT, p_phone TEXT)
+RETURNS SETOF public.orders LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+    SELECT * FROM public.orders
+    WHERE upper(order_number) = upper(trim(p_order_number))
+      AND length(regexp_replace(p_phone, '\D', '', 'g')) >= 9
+      AND right(regexp_replace(customer_phone, '\D', '', 'g'), 9) = right(regexp_replace(p_phone, '\D', '', 'g'), 9);
+$$;
+GRANT EXECUTE ON FUNCTION public.track_order(TEXT, TEXT) TO anon, authenticated;
+
+-- Drop every existing policy on public tables so this section re-runs cleanly
+DO $$
+DECLARE pol RECORD;
+BEGIN
+    FOR pol IN SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public' LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', pol.policyname, pol.tablename);
+    END LOOP;
+END $$;
+
+-- 1. PUBLIC READ (catalogue only — never orders, quotes or messages)
 CREATE POLICY "Public can view active categories" ON public.categories FOR SELECT USING (is_active = true);
 CREATE POLICY "Public can view active products" ON public.products FOR SELECT USING (is_active = true);
 CREATE POLICY "Public can view product images" ON public.product_images FOR SELECT USING (true);
@@ -245,20 +276,55 @@ CREATE POLICY "Public can view published testimonials" ON public.testimonials FO
 CREATE POLICY "Public can view active client logos" ON public.client_logos FOR SELECT USING (is_active = true);
 CREATE POLICY "Public can view site settings" ON public.site_settings FOR SELECT USING (true);
 
--- 2. PUBLIC INSERT POLICIES (Checkout, Quotations, Contact form)
-CREATE POLICY "Public can create orders" ON public.orders FOR INSERT WITH CHECK (true);
+-- 2. PUBLIC INSERT (checkout, quote form, contact form) — customers cannot set admin-only fields
+CREATE POLICY "Public can create orders" ON public.orders FOR INSERT
+    WITH CHECK (order_status = 'new' AND payment_status IN ('pending', 'verification_needed'));
 CREATE POLICY "Public can create order items" ON public.order_items FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public can upload artwork file references" ON public.artwork_files FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public can submit quotations" ON public.quotations FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public can send contact messages" ON public.contact_messages FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public can submit quotations" ON public.quotations FOR INSERT
+    WITH CHECK (status = 'new' AND admin_notes IS NULL AND quoted_amount IS NULL);
+CREATE POLICY "Public can send contact messages" ON public.contact_messages FOR INSERT WITH CHECK (is_read = false);
 
--- 3. ORDERS VIEW POLICY (by phone/email lookup or authenticated user)
-CREATE POLICY "Users can view their order by id or email" ON public.orders FOR SELECT 
-USING (true);
+-- 3. ADMIN FULL ACCESS
+CREATE POLICY "Admin full access" ON public.categories FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Admin full access" ON public.products FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Admin full access" ON public.product_images FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Admin full access" ON public.option_groups FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Admin full access" ON public.option_values FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Admin full access" ON public.price_matrix FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Admin full access" ON public.addons FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Admin full access" ON public.orders FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Admin full access" ON public.order_items FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Admin full access" ON public.artwork_files FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Admin full access" ON public.quotations FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Admin full access" ON public.contact_messages FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Admin full access" ON public.testimonials FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Admin full access" ON public.client_logos FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Admin full access" ON public.site_settings FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Admins can see own admin row" ON public.admin_users FOR SELECT TO authenticated USING (id = auth.uid());
 
--- 4. ADMIN POLICIES (Full CRUD for admin_users)
-CREATE POLICY "Admin full access on categories" ON public.categories FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.admin_users WHERE id = auth.uid()));
-CREATE POLICY "Admin full access on products" ON public.products FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.admin_users WHERE id = auth.uid()));
-CREATE POLICY "Admin full access on orders" ON public.orders FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.admin_users WHERE id = auth.uid()));
-CREATE POLICY "Admin full access on quotations" ON public.quotations FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.admin_users WHERE id = auth.uid()));
-CREATE POLICY "Admin full access on settings" ON public.site_settings FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.admin_users WHERE id = auth.uid()));
+-- ==============================================================================
+-- STORAGE POLICIES (customer uploads are write-only; only admins can read them)
+-- ==============================================================================
+DROP POLICY IF EXISTS "Public can upload customer files" ON storage.objects;
+DROP POLICY IF EXISTS "Admin can read customer files" ON storage.objects;
+DROP POLICY IF EXISTS "Admin can manage public assets" ON storage.objects;
+CREATE POLICY "Public can upload customer files" ON storage.objects FOR INSERT TO anon, authenticated
+    WITH CHECK (bucket_id IN ('artwork-uploads', 'quote-attachments'));
+CREATE POLICY "Admin can read customer files" ON storage.objects FOR SELECT TO authenticated
+    USING (bucket_id IN ('artwork-uploads', 'quote-attachments') AND public.is_admin());
+CREATE POLICY "Admin can manage public assets" ON storage.objects FOR ALL TO authenticated
+    USING (bucket_id IN ('product-images', 'site-assets') AND public.is_admin())
+    WITH CHECK (bucket_id IN ('product-images', 'site-assets') AND public.is_admin());
+
+-- ==============================================================================
+-- ADMIN LOGINS
+-- The admin page signs in with a USERNAME. Supabase Auth needs an email, so the app turns
+-- username 'x' into 'x@admin.aiprintingsolutions.com' (no mail is ever sent there).
+-- To add an admin: Authentication -> Users -> Add user, email = <username>@admin.aiprintingsolutions.com,
+-- tick 'Auto Confirm User', then run:
+--
+-- INSERT INTO public.admin_users (id, email)
+-- SELECT id, email FROM auth.users WHERE email = '<username>@admin.aiprintingsolutions.com'
+-- ON CONFLICT (id) DO NOTHING;
+-- ==============================================================================

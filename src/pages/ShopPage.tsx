@@ -175,7 +175,7 @@ export const ShopPage: React.FC = () => {
               {filteredProducts.map((prod) => (
                 <div
                   key={prod.id}
-                  className="bg-white rounded border border-[#E6E0D6] overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group"
+                  className="reveal bg-white rounded border border-[#E6E0D6] overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group"
                 >
                   <div>
                     <div className="relative aspect-4/3 bg-slate-100 overflow-hidden">

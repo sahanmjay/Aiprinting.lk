@@ -91,6 +91,7 @@ export interface UploadedArtwork {
   fileType: string;
   dataUrl?: string;
   previewUrl?: string;
+  storagePath?: string; // path in the 'artwork-uploads' bucket
 }
 
 export interface CartItem {
@@ -128,7 +129,7 @@ export interface Order {
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
   orderStatus: OrderStatus;
-  bankSlipUrl?: string;
+  bankSlipUrl?: string; // storage path in the 'artwork-uploads' bucket
   bankSlipName?: string;
   specialInstructions?: string;
   items: CartItem[];
@@ -150,7 +151,7 @@ export interface Quotation {
   specifications: string;
   deadline?: string;
   attachmentName?: string;
-  attachmentUrl?: string;
+  attachmentUrl?: string; // storage path in the 'quote-attachments' bucket
   status: QuoteStatus;
   adminNotes?: string;
   quotedAmount?: number;

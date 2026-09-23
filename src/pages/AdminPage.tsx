@@ -24,14 +24,17 @@ import {
   Trash2,
   Search,
   ExternalLink,
+  Mail,
+  RefreshCw,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatLKR } from '../lib/formatters';
+import { openStoredFile } from '../lib/supabase';
 import {
   VISITING_CARD_PAPERS,
   VISITING_CARD_QUANTITIES,
 } from '../data/seedData';
-import { OrderStatus, QuoteStatus, Order, Product } from '../types';
+import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product } from '../types';
 
 export const AdminPage: React.FC = () => {
   const {
@@ -44,8 +47,11 @@ export const AdminPage: React.FC = () => {
     isAdminLoggedIn,
     loginAdmin,
     logoutAdmin,
-    updateOrderStatus,
+    updateOrder,
     updateQuoteStatus,
+    contactMessages,
+    markMessageRead,
+    refreshAdminData,
     updatePriceCell,
     bulkAdjustGridPrices,
     exportGridCSV,
@@ -58,12 +64,15 @@ export const AdminPage: React.FC = () => {
   } = useStore();
 
   // Authentication State
+  const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
-  const [authError, setAuthError] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Active Admin Tab
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'orders' | 'pricegrid' | 'products' | 'quotes' | 'settings'
+    'dashboard' | 'orders' | 'pricegrid' | 'products' | 'quotes' | 'messages' | 'settings'
   >('dashboard');
 
   // Orders Tab State
@@ -283,35 +292,55 @@ export const AdminPage: React.FC = () => {
           </div>
 
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              const ok = loginAdmin(passwordInput);
-              if (!ok) setAuthError(true);
+              setIsSigningIn(true);
+              setAuthError(await loginAdmin(usernameInput.trim(), passwordInput));
+              setIsSigningIn(false);
             }}
             className="space-y-4 text-xs text-left"
           >
             <div className="space-y-1">
-              <label className="font-bold text-slate-700">Access Key / Password</label>
+              <label htmlFor="admin-username" className="font-bold text-slate-700">Username</label>
               <input
+                id="admin-username"
+                type="text"
+                autoCapitalize="none"
+                spellCheck={false}
+                autoComplete="username"
+                required
+                value={usernameInput}
+                onChange={(e) => {
+                  setUsernameInput(e.target.value);
+                  setAuthError(null);
+                }}
+                className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label htmlFor="admin-password" className="font-bold text-slate-700">Password</label>
+              <input
+                id="admin-password"
                 type="password"
+                autoComplete="current-password"
+                required
                 value={passwordInput}
                 onChange={(e) => {
                   setPasswordInput(e.target.value);
-                  setAuthError(false);
+                  setAuthError(null);
                 }}
-                placeholder="Enter password (default: admin123)"
                 className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden"
               />
-              {authError && (
-                <p className="text-red-500 text-[11px]">Invalid master password. Please re-enter.</p>
-              )}
+              {authError && <p role="alert" className="text-red-500 text-[11px]">{authError}</p>}
             </div>
 
             <button
               type="submit"
-              className="w-full py-3 bg-[#0F1B2D] hover:bg-[#182A45] text-white font-bold text-xs rounded transition-colors shadow-sm"
+              disabled={isSigningIn}
+              className="w-full py-3 bg-[#0F1B2D] hover:bg-[#182A45] text-white font-bold text-xs rounded transition-colors shadow-sm disabled:opacity-60"
             >
-              Sign In to Admin Portal
+              {isSigningIn ? 'Signing in…' : 'Sign In to Admin Portal'}
             </button>
           </form>
 
@@ -399,6 +428,18 @@ export const AdminPage: React.FC = () => {
             Logged in as Staff Administrator
           </span>
           <button
+            onClick={async () => {
+              setIsRefreshing(true);
+              await refreshAdminData();
+              setIsRefreshing(false);
+            }}
+            disabled={isRefreshing}
+            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded flex items-center gap-1.5 transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+          <button
             onClick={logoutAdmin}
             className="px-3 py-1.5 bg-red-600/80 hover:bg-red-600 text-white text-xs font-semibold rounded flex items-center gap-1.5 transition-colors"
           >
@@ -474,6 +515,19 @@ export const AdminPage: React.FC = () => {
         </button>
 
         <button
+          onClick={() => setActiveTab('messages')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-t transition-colors ${
+            activeTab === 'messages'
+              ? 'bg-white border-t-2 border-[#D6342C] text-[#0F1B2D] shadow-xs'
+              : 'text-slate-600 hover:text-[#0F1B2D]'
+          }`}
+        >
+          <Mail className="w-4 h-4" />
+          <span>Messages ({contactMessages.length})</span>
+          {contactMessages.some((m) => !m.isRead) && <span className="w-2 h-2 rounded-full bg-[#D6342C]" />}
+        </button>
+
+        <button
           onClick={() => setActiveTab('settings')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-t transition-colors ${
             activeTab === 'settings'
@@ -485,6 +539,12 @@ export const AdminPage: React.FC = () => {
           <span>Site Settings</span>
         </button>
       </div>
+
+      {(activeTab === 'pricegrid' || activeTab === 'products' || activeTab === 'settings') && (
+        <div className="p-3 bg-amber-50 border border-amber-300 text-amber-900 text-xs rounded">
+          Changes on this tab are saved in this browser only and are not yet stored in the database.
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 1. DASHBOARD OVERVIEW */}
@@ -635,7 +695,7 @@ export const AdminPage: React.FC = () => {
                     <td className="p-3">
                       <select
                         value={o.orderStatus}
-                        onChange={(e) => updateOrderStatus(o.id, e.target.value as OrderStatus)}
+                        onChange={(e) => updateOrder(o.id, { orderStatus: e.target.value as OrderStatus })}
                         className="p-1 text-[11px] font-bold uppercase rounded border border-slate-300 bg-white"
                       >
                         <option value="new">New</option>
@@ -684,8 +744,37 @@ export const AdminPage: React.FC = () => {
                   <div><strong>Phone:</strong> {selectedOrder.customerPhone}</div>
                   <div><strong>Email:</strong> {selectedOrder.customerEmail}</div>
                   <div><strong>Delivery Address:</strong> {selectedOrder.deliveryAddress}, {selectedOrder.city} ({selectedOrder.district})</div>
-                  <div><strong>Payment Method:</strong> {selectedOrder.paymentMethod} ({selectedOrder.paymentStatus})</div>
+                  <div><strong>Payment Method:</strong> {selectedOrder.paymentMethod.replace('_', ' ')}</div>
                   <div><strong>Order Status:</strong> {selectedOrder.orderStatus}</div>
+                  <label className="flex items-center gap-2">
+                    <strong>Payment Status:</strong>
+                    <select
+                      value={selectedOrder.paymentStatus}
+                      onChange={(e) => {
+                        const paymentStatus = e.target.value as PaymentStatus;
+                        updateOrder(selectedOrder.id, { paymentStatus });
+                        setSelectedOrder({ ...selectedOrder, paymentStatus });
+                      }}
+                      className="p-1 text-[11px] font-bold uppercase rounded border border-slate-300 bg-white"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="verification_needed">Verify Slip</option>
+                      <option value="paid">Paid</option>
+                      <option value="failed">Failed</option>
+                    </select>
+                  </label>
+                  {selectedOrder.bankSlipUrl && (
+                    <button
+                      onClick={() => openStoredFile('artwork-uploads', selectedOrder.bankSlipUrl!)}
+                      className="flex items-center gap-1 text-left text-[#D6342C] font-semibold hover:underline"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      View bank slip ({selectedOrder.bankSlipName || 'file'})
+                    </button>
+                  )}
+                  {selectedOrder.specialInstructions && (
+                    <div className="col-span-2"><strong>Instructions:</strong> {selectedOrder.specialInstructions}</div>
+                  )}
                 </div>
 
                 {/* Items & Artwork */}
@@ -703,12 +792,18 @@ export const AdminPage: React.FC = () => {
                       {item.artworkFiles.length > 0 && (
                         <div className="pt-2 border-t border-slate-200">
                           <span className="font-bold text-[11px] text-slate-700 block">Uploaded Artwork Files:</span>
-                          <div className="flex gap-2 mt-1">
+                          <div className="flex flex-wrap gap-2 mt-1">
                             {item.artworkFiles.map((art, fIdx) => (
-                              <span key={fIdx} className="px-2 py-1 bg-white border border-slate-300 rounded text-[10px] flex items-center gap-1 font-mono">
+                              <button
+                                key={fIdx}
+                                disabled={!art.storagePath}
+                                onClick={() => art.storagePath && openStoredFile('artwork-uploads', art.storagePath)}
+                                title={art.storagePath ? 'Open file' : 'File was not uploaded'}
+                                className="px-2 py-1 bg-white border border-slate-300 rounded text-[10px] flex items-center gap-1 font-mono enabled:hover:border-[#0F1B2D] disabled:opacity-60"
+                              >
                                 <FileCheck className="w-3 h-3 text-emerald-600" />
                                 {art.fileName}
-                              </span>
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -1460,8 +1555,18 @@ export const AdminPage: React.FC = () => {
                       <div className="font-bold text-slate-800">{q.productType}</div>
                       <div className="text-slate-500">{q.quantity}</div>
                     </td>
-                    <td className="p-3 max-w-xs truncate text-slate-600" title={q.specifications}>
-                      {q.specifications}
+                    <td className="p-3 max-w-xs text-slate-600">
+                      <div className="truncate" title={q.specifications}>{q.specifications}</div>
+                      {q.deadline && <div className="text-[10px] text-slate-400">Needed by {q.deadline}</div>}
+                      {q.attachmentUrl && (
+                        <button
+                          onClick={() => openStoredFile('quote-attachments', q.attachmentUrl!)}
+                          className="mt-1 flex items-center gap-1 text-[11px] text-[#D6342C] font-semibold hover:underline"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          {q.attachmentName || 'Attachment'}
+                        </button>
+                      )}
                     </td>
                     <td className="p-3">
                       <select
@@ -1480,6 +1585,48 @@ export const AdminPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'messages' && (
+        <div className="space-y-3">
+          {contactMessages.length === 0 && (
+            <div className="bg-white p-8 rounded-lg border border-[#E6E0D6] text-center text-xs text-slate-500">
+              No contact messages yet.
+            </div>
+          )}
+          {contactMessages.map((m) => (
+            <div
+              key={m.id}
+              className={`bg-white p-4 rounded-lg border shadow-xs text-xs space-y-2 ${
+                m.isRead ? 'border-[#E6E0D6]' : 'border-[#D6342C]/50'
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-2">
+                <div>
+                  <div className="font-bold text-sm text-[#0F1B2D]">{m.subject}</div>
+                  <div className="text-slate-500">
+                    {m.name} · <a href={`mailto:${m.email}`} className="hover:underline">{m.email}</a>
+                    {m.phone && <> · <a href={`tel:${m.phone}`} className="hover:underline">{m.phone}</a></>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="text-slate-400">{new Date(m.createdAt).toLocaleString()}</span>
+                  {m.isRead ? (
+                    <span className="text-emerald-700 font-semibold">Read</span>
+                  ) : (
+                    <button
+                      onClick={() => markMessageRead(m.id)}
+                      className="px-2.5 py-1 bg-[#0F1B2D] text-white text-[11px] font-semibold rounded hover:bg-[#182A45]"
+                    >
+                      Mark as read
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{m.message}</p>
+            </div>
+          ))}
         </div>
       )}
 

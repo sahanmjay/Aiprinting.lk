@@ -61,7 +61,7 @@ export const AboutPage: React.FC = () => {
       </section>
 
       {/* 2. THE FOUR SERVICE PILLARS (Prompt 7 requirement) */}
-      <section className="bg-white py-16 border-y border-[#E6E0D6]">
+      <section className="reveal bg-white py-16 border-y border-[#E6E0D6]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-10">
           <div className="text-center max-w-xl mx-auto space-y-2">
             <div className="text-xs font-bold uppercase tracking-widest text-[#D6342C]">
@@ -124,7 +124,7 @@ export const AboutPage: React.FC = () => {
       </section>
 
       {/* 3. INFRASTRUCTURE & SPECIALITY FINISHES */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
+      <section className="reveal max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
         <div className="bg-white p-8 sm:p-12 rounded-lg border border-[#E6E0D6] space-y-6">
           <div className="space-y-2">
             <div className="text-xs font-bold uppercase tracking-widest text-[#D6342C]">
@@ -165,7 +165,7 @@ export const AboutPage: React.FC = () => {
       </section>
 
       {/* 4. BOTTOM ACTION */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 text-center space-y-4">
+      <section className="reveal max-w-7xl mx-auto px-4 sm:px-6 text-center space-y-4">
         <h3 className="text-xl sm:text-2xl font-bold text-[#0F1B2D]">
           Ready to partner with Sri Lanka's dedicated commercial print facility?
         </h3>

@@ -47,6 +47,7 @@ export const ContactPage: React.FC = () => {
       setMessage('');
     } catch (err) {
       console.error('Failed to send contact message:', err);
+      alert('Sorry, your message could not be sent. Please try again, or call us.');
     } finally {
       setIsSubmitting(false);
     }

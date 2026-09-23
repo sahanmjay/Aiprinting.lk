@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
+import { uploadFile } from '../lib/supabase';
 import { getWhatsAppUrl } from '../lib/formatters';
 
 export const QuotePage: React.FC = () => {
@@ -31,16 +32,19 @@ export const QuotePage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedQuoteNumber, setSubmittedQuoteNumber] = useState<string | null>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const file = files[0];
-    setAttachmentName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setAttachmentUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    setAttachmentName(`Uploading ${file.name}…`);
+    try {
+      setAttachmentUrl(await uploadFile('quote-attachments', file));
+      setAttachmentName(file.name);
+    } catch (err) {
+      console.error('Attachment upload failed:', err);
+      setAttachmentName('');
+      alert('Could not upload the attachment. Please try again, or email it to us.');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -69,6 +73,7 @@ export const QuotePage: React.FC = () => {
       setSubmittedQuoteNumber(quote.quoteNumber);
     } catch (err) {
       console.error('Failed to submit quote:', err);
+      alert('Sorry, we could not send your quote request. Please try again, or contact us on WhatsApp.');
     } finally {
       setIsSubmitting(false);
     }

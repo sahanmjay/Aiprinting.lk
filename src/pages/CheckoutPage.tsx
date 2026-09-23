@@ -13,6 +13,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
+import { uploadFile } from '../lib/supabase';
 import { formatLKR, isValidSriLankanPhone } from '../lib/formatters';
 import { SRI_LANKA_DISTRICTS } from '../data/seedData';
 import { PaymentMethod } from '../types';
@@ -55,16 +56,19 @@ export const CheckoutPage: React.FC = () => {
     );
   }
 
-  const handleBankSlipUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBankSlipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const file = files[0];
-    setBankSlipName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setBankSlipUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    setBankSlipName(`Uploading ${file.name}…`);
+    try {
+      setBankSlipUrl(await uploadFile('artwork-uploads', file));
+      setBankSlipName(file.name);
+    } catch (err) {
+      console.error('Bank slip upload failed:', err);
+      setBankSlipName('');
+      alert('Could not upload the bank slip. Please try again, or WhatsApp it to us after ordering.');
+    }
   };
 
   const validate = () => {
@@ -108,7 +112,8 @@ export const CheckoutPage: React.FC = () => {
         ),
         total: cartTotal,
         paymentMethod,
-        paymentStatus: paymentMethod === 'payhere' ? 'paid' : 'pending',
+        // Only staff (or a verified gateway callback) can mark an order paid
+        paymentStatus: bankSlipUrl ? 'verification_needed' : 'pending',
         orderStatus: 'new',
         bankSlipName,
         bankSlipUrl,
@@ -119,6 +124,7 @@ export const CheckoutPage: React.FC = () => {
       navigate(`/order-confirmation/${order.id}`);
     } catch (err) {
       console.error('Failed to submit order:', err);
+      alert('Sorry, we could not place your order. Please try again, or order via WhatsApp.');
       setIsSubmitting(false);
     }
   };

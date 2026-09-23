@@ -16,6 +16,7 @@ import {
   Maximize2,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
+import { uploadFile } from '../lib/supabase';
 import { formatLKR, getWhatsAppUrl, formatFileSize } from '../lib/formatters';
 import { UploadedArtwork, CartItem, Product } from '../types';
 import { RegistrationMark } from '../components/common/RegistrationMark';
@@ -77,35 +78,26 @@ export const ProductDetailPage: React.FC = () => {
   const totalPrice = baseOptionPrice + designFee;
   const unitPrice = quantityCount > 0 ? totalPrice / quantityCount : 0;
 
-  // File Upload Handler Simulation
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, slot: 1 | 2) => {
+  // Artwork goes straight to Supabase Storage; the cart keeps only the storage path.
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, slot: 1 | 2) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     const file = files[0];
     setIsUploading(true);
-
-    // Create thumbnail / preview reader
-    const reader = new FileReader();
-    reader.onload = () => {
-      setTimeout(() => {
-        setArtworkFiles((prev) => {
-          const filtered = prev.filter((f) => f.slot !== slot);
-          return [
-            ...filtered,
-            {
-              slot,
-              fileName: file.name,
-              fileSize: file.size,
-              fileType: file.type,
-              previewUrl: file.type.startsWith('image/') ? (reader.result as string) : undefined,
-            },
-          ];
-        });
-        setIsUploading(false);
-      }, 400);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const storagePath = await uploadFile('artwork-uploads', file);
+      setArtworkFiles((prev) => [
+        ...prev.filter((f) => f.slot !== slot),
+        { slot, fileName: file.name, fileSize: file.size, fileType: file.type, storagePath },
+      ]);
+    } catch (err) {
+      console.error('Artwork upload failed:', err);
+      alert('Could not upload your artwork. Please try again, or email it to us after placing the order.');
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
   };
 
   const removeArtworkFile = (slot: 1 | 2) => {
@@ -535,7 +527,8 @@ export const ProductDetailPage: React.FC = () => {
           <div className="space-y-3 pt-2">
             <button
               onClick={handleAddToCart}
-              className="w-full py-3.5 px-4 bg-[#D6342C] hover:bg-[#B8251E] text-white font-bold text-sm rounded shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 active:scale-99"
+              disabled={isUploading}
+              className="w-full py-3.5 px-4 bg-[#D6342C] hover:bg-[#B8251E] text-white font-bold text-sm rounded shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 active:scale-99 disabled:opacity-60 disabled:cursor-wait"
             >
               <ShoppingBag className="w-4 h-4" />
               <span>Add to Cart ({formatLKR(totalPrice)})</span>
