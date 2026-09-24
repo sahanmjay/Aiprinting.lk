@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { flushSync } from 'react-dom';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ShieldCheck,
@@ -14,12 +15,14 @@ import {
   Layers,
   ChevronRight,
   Maximize2,
+  FileDown,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { uploadFile } from '../lib/supabase';
-import { formatLKR, getWhatsAppUrl, formatFileSize } from '../lib/formatters';
+import { formatLKR, getWhatsAppUrl, formatFileSize, generateQuoteNumber } from '../lib/formatters';
 import { UploadedArtwork, CartItem, Product } from '../types';
 import { RegistrationMark } from '../components/common/RegistrationMark';
+import { QuotationDocument, QuotationData, QuotationLine } from '../components/common/QuotationDocument';
 
 export const ProductDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -56,6 +59,12 @@ export const ProductDetailPage: React.FC = () => {
   // Active Tab below the fold
   const [activeTab, setActiveTab] = useState<'description' | 'specs' | 'delivery'>('description');
   const [addedToast, setAddedToast] = useState(false);
+
+  // Instant quotation PDF
+  const [quoteName, setQuoteName] = useState('');
+  const [quoteCompany, setQuoteCompany] = useState('');
+  const [quotePhone, setQuotePhone] = useState('');
+  const [quoteData, setQuoteData] = useState<QuotationData | null>(null);
 
   // Price Calculation
   const selectedPaper = paperGroup?.values.find((v) => v.id === selectedPaperId);
@@ -154,6 +163,50 @@ export const ProductDetailPage: React.FC = () => {
     setTimeout(() => setAddedToast(false), 3000);
   };
 
+  // Renders the quotation into the print-only document, then opens the print dialog ("Save as PDF").
+  const handleDownloadQuote = () => {
+    const details: string[] = [];
+    if (paperGroup && selectedPaper) details.push(`${paperGroup.name}: ${selectedPaper.label}`);
+    if (product.sizeNote) details.push(product.sizeNote);
+    details.push(artworkType === 'design' ? 'Artwork: designed by Ai Printing' : 'Artwork: supplied by customer (print-ready)');
+
+    const lines: QuotationLine[] = [
+      { description: product.name, details, quantity: selectedQty?.label ?? '1', amount: baseOptionPrice },
+    ];
+    if (artworkType === 'design') {
+      lines.push({
+        description: 'Professional Artwork Design',
+        details: ['In-house layout design with digital PDF proof'],
+        quantity: '1',
+        amount: designFee,
+      });
+    }
+
+    const data: QuotationData = {
+      quoteNumber: generateQuoteNumber(),
+      date: new Date(),
+      customerName: quoteName.trim(),
+      company: quoteCompany.trim(),
+      phone: quotePhone.trim(),
+      lines,
+      notes: specialInstructions.trim(),
+    };
+    flushSync(() => setQuoteData(data)); // document must be in the DOM before print() snapshots it
+
+    const prevTitle = document.title;
+    document.title = `Quotation ${data.quoteNumber} - ${siteSettings.siteName}`; // default PDF file name
+    document.body.classList.add('printing-quote');
+    window.addEventListener(
+      'afterprint',
+      () => {
+        document.body.classList.remove('printing-quote');
+        document.title = prevTitle;
+      },
+      { once: true }
+    );
+    window.print();
+  };
+
   // Build WhatsApp pre-filled configuration message
   const whatsappMessage = useMemo(() => {
     let msg = `Hi Ai Printing Solutions! I'd like to order:\n\n*Product:* ${product.name}\n`;
@@ -173,6 +226,7 @@ export const ProductDetailPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-12">
+      {quoteData && <QuotationDocument data={quoteData} settings={siteSettings} />}
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-xs text-slate-500">
         <Link to="/" className="hover:text-[#0F1B2D]">Home</Link>
@@ -543,6 +597,55 @@ export const ProductDetailPage: React.FC = () => {
               <MessageCircle className="w-4 h-4" />
               <span>Order Directly on WhatsApp</span>
             </a>
+
+            {/* Instant quotation PDF */}
+            <details className="group rounded border border-[#E6E0D6] bg-[#FAF8F5] open:bg-white">
+              <summary className="cursor-pointer list-none px-4 py-3 text-xs font-bold text-[#0F1B2D] flex items-center justify-center gap-2 hover:text-[#D6342C] transition-colors">
+                <FileDown className="w-4 h-4" />
+                <span>Download a Formal Quotation (PDF)</span>
+              </summary>
+              <div className="px-4 pb-4 space-y-2.5 text-xs">
+                <p className="text-[11px] text-slate-500">
+                  Uses your selections above. Add your details to have them printed on the quotation (optional).
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    aria-label="Your name"
+                    placeholder="Your name"
+                    value={quoteName}
+                    onChange={(e) => setQuoteName(e.target.value)}
+                    className="w-full p-2 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden focus:border-[#0F1B2D]"
+                  />
+                  <input
+                    aria-label="Company"
+                    placeholder="Company (optional)"
+                    value={quoteCompany}
+                    onChange={(e) => setQuoteCompany(e.target.value)}
+                    className="w-full p-2 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden focus:border-[#0F1B2D]"
+                  />
+                  <input
+                    aria-label="Phone"
+                    type="tel"
+                    placeholder="Phone (optional)"
+                    value={quotePhone}
+                    onChange={(e) => setQuotePhone(e.target.value)}
+                    className="w-full p-2 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden focus:border-[#0F1B2D] sm:col-span-2"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadQuote}
+                  disabled={totalPrice <= 0}
+                  className="w-full py-2.5 px-4 bg-[#0F1B2D] hover:bg-[#182A45] text-white font-bold text-xs rounded transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  <FileDown className="w-4 h-4" />
+                  <span>Generate Quotation ({formatLKR(totalPrice + siteSettings.deliveryFee)} incl. delivery)</span>
+                </button>
+                <p className="text-[10px] text-slate-400 text-center">
+                  In the print window choose "Save as PDF" as the destination.
+                </p>
+              </div>
+            </details>
 
             {addedToast && (
               <div className="p-2.5 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs rounded font-medium flex items-center justify-between animate-in fade-in">
