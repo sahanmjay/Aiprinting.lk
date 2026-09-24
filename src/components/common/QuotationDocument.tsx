@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { formatLKR } from '../../lib/formatters';
 import { SiteSettings } from '../../types';
+import logoMark from '../../assets/logo-mark.png';
 
 export interface QuotationLine {
   description: string;
@@ -40,9 +41,12 @@ export const QuotationDocument: React.FC<{ data: QuotationData; settings: SiteSe
       {/* Letterhead */}
       <div className="flex justify-between items-start border-b-4 border-[#0F1B2D] pb-4">
         <div>
-          <div className="text-2xl font-bold text-[#0F1B2D]">
-            {settings.siteName}
-            <span className="text-[#D6342C]">.</span>
+          <div className="flex items-center gap-3">
+            <img src={logoMark} alt="" width={44} height={44} className="w-11 h-11 rounded-lg" />
+            <div className="text-2xl font-bold text-[#0F1B2D]">
+              {settings.siteName}
+              <span className="text-[#D6342C]">.</span>
+            </div>
           </div>
           <div className="text-[11px] text-slate-600 mt-1">{settings.address}</div>
           <div className="text-[11px] text-slate-600">

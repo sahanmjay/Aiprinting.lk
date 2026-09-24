@@ -4,6 +4,7 @@ import { ShoppingBag, Menu, X, MessageCircle, Phone, ChevronDown, Layers, User }
 import { useStore } from '../../context/StoreContext';
 import { RegistrationMark } from './RegistrationMark';
 import { getWhatsAppUrl } from '../../lib/formatters';
+import logoHorizontal from '../../assets/logo-horizontal.png';
 
 interface HeaderProps {
   onOpenCart?: () => void;
@@ -52,19 +53,14 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCart }) => {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between">
         {/* LOGO */}
-        <Link to="/" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 bg-[#0F1B2D] rounded flex items-center justify-center text-[#FAF8F5] font-bold text-xl tracking-tighter border border-[#0F1B2D] shadow-xs group-hover:bg-[#182A45] transition-colors relative">
-            <span>Ai</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-[#D6342C] absolute bottom-1.5 right-1.5" />
-          </div>
-          <div>
-            <div className="font-bold text-lg sm:text-xl tracking-tight text-[#0F1B2D] leading-none">
-              Ai Printing<span className="text-[#D6342C]">.</span>
-            </div>
-            <div className="text-[10px] tracking-widest uppercase text-slate-500 font-medium mt-0.5">
-              Commercial Printing
-            </div>
-          </div>
+        <Link to="/" className="shrink-0" aria-label="Ai Printing Solutions — home">
+          <img
+            src={logoHorizontal}
+            alt="Ai Printing Solutions"
+            width={220}
+            height={44}
+            className="h-9 max-[379px]:h-8 sm:h-11 w-auto hover:opacity-90 transition-opacity"
+          />
         </Link>
 
         {/* DESKTOP NAVIGATION */}

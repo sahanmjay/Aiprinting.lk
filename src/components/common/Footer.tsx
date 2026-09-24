@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { MapPin, Phone, Mail, Clock, ShieldCheck, ArrowRight } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { RegistrationMark } from './RegistrationMark';
+import logoMark from '../../assets/logo-mark.png';
 
 
 export const Footer: React.FC = () => {
@@ -16,9 +17,7 @@ export const Footer: React.FC = () => {
           {/* Company Info */}
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-[#FAF8F5] rounded flex items-center justify-center text-[#0F1B2D] font-bold text-lg">
-                Ai
-              </div>
+              <img src={logoMark} alt="" width={36} height={36} className="w-9 h-9 rounded-lg" />
               <span className="font-bold text-xl tracking-tight text-white">
                 Ai Printing Solutions<span className="text-[#D6342C]">.</span>
               </span>

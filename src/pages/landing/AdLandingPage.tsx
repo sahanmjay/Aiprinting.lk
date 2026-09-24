@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { formatLKR, getWhatsAppUrl } from '../../lib/formatters';
+import logoMark from '../../assets/logo-mark.png';
 
 interface LandingProps {
   variant: 'visiting-cards' | 'bill-books' | 'same-day';
@@ -74,9 +75,7 @@ export const AdLandingPage: React.FC<LandingProps> = ({ variant }) => {
       <div className="bg-[#0F1B2D] text-white py-3 px-4 sm:px-6 border-b border-[#1E2E46]">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-[#FAF8F5] text-[#0F1B2D] font-bold rounded flex items-center justify-center text-sm">
-              Ai
-            </div>
+            <img src={logoMark} alt="" width={32} height={32} className="w-8 h-8 rounded-md" />
             <span className="font-bold text-base tracking-tight">Ai Printing Solutions</span>
           </Link>
 
