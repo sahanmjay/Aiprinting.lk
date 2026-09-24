@@ -22,7 +22,7 @@ import { getWhatsAppUrl } from '../lib/formatters';
 import { FlowButton } from '../components/ui/flow-button';
 
 export const HomePage: React.FC = () => {
-  const { categories, products, siteSettings } = useStore();
+  const { categories, products, siteSettings, getFromPrice } = useStore();
 
   const featuredProducts = products.filter((p) => p.isFeatured || p.isHot).slice(0, 4);
 
@@ -49,7 +49,7 @@ export const HomePage: React.FC = () => {
               </h1>
 
               <p className="text-base sm:text-lg text-slate-300 max-w-xl font-normal leading-relaxed">
-                From luxury double-sided visiting cards in 9 speciality boards to carbonless bill books and marketing collateral. Real-time pricing matrix and reliable 1–2 day island-wide delivery.
+                From luxury double-sided visiting cards in 8 speciality boards to carbonless bill books and marketing collateral. Real-time pricing matrix and reliable 1–2 day island-wide delivery.
               </p>
 
               {/* CTAs */}
@@ -108,7 +108,7 @@ export const HomePage: React.FC = () => {
                     loading="eager"
                   />
                   <div className="absolute bottom-2 left-2 bg-[#0F1B2D]/90 text-white text-[11px] px-2.5 py-1 rounded backdrop-blur-xs font-medium">
-                    9 Premium Board Stocks
+                    8 Premium Board Stocks
                   </div>
                 </div>
 
@@ -292,9 +292,9 @@ export const HomePage: React.FC = () => {
 
               <div className="p-4 pt-0 border-t border-slate-100 mt-2 flex items-center justify-between">
                 <div>
-                  <div className="text-[10px] text-slate-500 uppercase">From</div>
+                  <div className="text-[10px] text-slate-500 uppercase">{getFromPrice(prod.id) ? 'From' : 'Price'}</div>
                   <div className="text-sm font-bold text-[#0F1B2D]">
-                    {formatLKR(prod.basePrice)}
+                    {getFromPrice(prod.id) ? formatLKR(getFromPrice(prod.id)) : 'On request'}
                   </div>
                 </div>
                 <Link

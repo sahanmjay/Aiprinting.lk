@@ -23,18 +23,16 @@ import {
   Copy,
   Trash2,
   Search,
+  Users,
   ExternalLink,
   Mail,
   RefreshCw,
   MessageCircle,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import { formatLKR, getWhatsAppUrl } from '../lib/formatters';
+import { formatLKR, formatItemPrice, getWhatsAppUrl } from '../lib/formatters';
 import { openStoredFile } from '../lib/supabase';
-import {
-  VISITING_CARD_PAPERS,
-  VISITING_CARD_QUANTITIES,
-} from '../data/seedData';
+import { tableOptionGroups } from '../data/priceTables';
 import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product } from '../types';
 
 // "delivered" is the completed state (kept as the DB value; shown to staff as Completed)
@@ -69,10 +67,12 @@ export const AdminPage: React.FC = () => {
     updateOrder,
     updateQuoteStatus,
     contactMessages,
+    registeredCustomers,
     markMessageRead,
     refreshAdminData,
     savePriceMatrix,
     updatePriceCell,
+    getFromPrice,
     bulkAdjustGridPrices,
     exportGridCSV,
     importGridCSV,
@@ -92,21 +92,20 @@ export const AdminPage: React.FC = () => {
 
   // Active Admin Tab
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'orders' | 'pricegrid' | 'products' | 'quotes' | 'messages' | 'settings'
+    'dashboard' | 'orders' | 'pricegrid' | 'products' | 'quotes' | 'messages' | 'customers' | 'settings'
   >('dashboard');
 
   // Orders Tab State
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
   const [orderSearch, setOrderSearch] = useState<string>('');
+  const [customerSearch, setCustomerSearch] = useState('');
   const [orderPaymentFilter, setOrderPaymentFilter] = useState<'all' | 'unpaid' | PaymentStatus>('all');
   const [orderDateFilter, setOrderDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('all');
 
   // Price Grid Editor State
-  const [selectedGridProduct, setSelectedGridProduct] = useState<'prod-vc-double' | 'prod-vc-single'>(
-    'prod-vc-double'
-  );
-  const [gridPaperId, setGridPaperId] = useState<string>(VISITING_CARD_PAPERS[0].id);
+  const [selectedGridProduct, setSelectedGridProduct] = useState<string>('prod-vc-double');
+  const [gridPaperId, setGridPaperId] = useState<string>('');
   const [pricesDirty, setPricesDirty] = useState(false);
   const [isSavingPrices, setIsSavingPrices] = useState(false);
   const [bulkPercentInput, setBulkPercentInput] = useState<number>(5);
@@ -250,39 +249,13 @@ export const AdminPage: React.FC = () => {
             isPrimary: true,
           },
         ],
-        optionGroups: [
-          {
-            id: `grp-paper-${Date.now()}`,
-            productId: `prod-temp`,
-            name: 'Paper Stock / Material',
-            inputType: 'select',
-            isRequired: true,
-            sortOrder: 1,
-            values: VISITING_CARD_PAPERS.map((p, idx) => ({
-              id: p.id,
-              groupId: `grp-paper-${Date.now()}`,
-              label: p.label,
-              sortOrder: idx + 1,
-              isActive: true,
-              finishType: p.finishType,
-            })),
-          },
-          {
-            id: `grp-qty-${Date.now()}`,
-            productId: `prod-temp`,
-            name: 'Quantity',
-            inputType: 'select',
-            isRequired: true,
-            sortOrder: 2,
-            values: VISITING_CARD_QUANTITIES.map((q, idx) => ({
-              id: q.id,
-              groupId: `grp-qty-${Date.now()}`,
-              label: q.label,
-              sortOrder: idx + 1,
-              isActive: true,
-            })),
-          },
-        ],
+        // Starts as "price on request"; edit its options/prices under Admin → Prices
+        optionGroups: tableOptionGroups(`prod-new-${Date.now()}`, {
+          rowName: 'Option',
+          colName: 'Quantity',
+          rows: ['Standard'],
+          cols: ['100', '250', '500', '1,000'],
+        }),
       });
     }
     setIsProductModalOpen(false);
@@ -464,11 +437,23 @@ export const AdminPage: React.FC = () => {
   const pendingOrdersCount = orders.filter((o) => ['new', 'confirmed'].includes(o.orderStatus)).length;
   const pendingQuotesCount = quotations.filter((q) => q.status === 'new').length;
 
-  const gridPrice = (paperId: string, qtyId: string) =>
-    priceMatrix[selectedGridProduct]?.find((c) => c.optionValueA === paperId && c.optionValueB === qtyId)?.price ?? 0;
+  // Price editor works on any product: rows = its first option (e.g. paper), columns = its second (e.g. quantity)
+  const gridProduct = products.find((p) => p.id === selectedGridProduct);
+  const gridRows = gridProduct?.optionGroups?.[0]?.values ?? [];
+  const gridCols = gridProduct?.optionGroups?.[1]?.values ?? [];
+  const activeRowId = gridRows.some((v) => v.id === gridPaperId) ? gridPaperId : (gridRows[0]?.id ?? '');
+  const unitCount = (label: string) => Number((label.replace(/,/g, '').match(/\d+/) || [0])[0]);
 
-  const setGridPrice = (paperId: string, qtyId: string, price: number) => {
-    updatePriceCell(selectedGridProduct, paperId, qtyId, price);
+  const gridPrice = (rowId: string, colId: string) =>
+    priceMatrix[selectedGridProduct]?.find((c) => c.optionValueA === rowId && c.optionValueB === colId)?.price;
+
+  const rowFromPrice = (rowId: string) => {
+    const prices = gridCols.map((c) => gridPrice(rowId, c.id)).filter((p): p is number => p != null);
+    return prices.length ? Math.min(...prices) : null;
+  };
+
+  const setGridPrice = (rowId: string, colId: string, price: number | null) => {
+    updatePriceCell(selectedGridProduct, rowId, colId, price);
     setPricesDirty(true);
   };
 
@@ -476,14 +461,15 @@ export const AdminPage: React.FC = () => {
   const applyPercent = (scope: 'paper' | 'all') => {
     if (!bulkPercentInput) return;
     const direction = bulkPercentInput > 0 ? 'Increase' : 'Decrease';
-    const target = scope === 'all' ? 'ALL papers' : 'this paper';
+    const target = scope === 'all' ? `ALL options of ${gridProduct?.name}` : 'this option';
     if (!confirm(`${direction} prices of ${target} by ${Math.abs(bulkPercentInput)}%?\nPrices are rounded to the nearest Rs. 50.`)) return;
     if (scope === 'all') {
       bulkAdjustGridPrices(selectedGridProduct, bulkPercentInput);
     } else {
-      for (const qty of VISITING_CARD_QUANTITIES) {
-        const price = gridPrice(gridPaperId, qty.id);
-        updatePriceCell(selectedGridProduct, gridPaperId, qty.id, Math.round((price * (1 + bulkPercentInput / 100)) / 50) * 50);
+      for (const col of gridCols) {
+        const price = gridPrice(activeRowId, col.id);
+        if (price == null) continue;
+        updatePriceCell(selectedGridProduct, activeRowId, col.id, Math.round((price * (1 + bulkPercentInput / 100)) / 50) * 50);
       }
     }
     setPricesDirty(true);
@@ -611,7 +597,7 @@ export const AdminPage: React.FC = () => {
           }`}
         >
           <Grid className="w-4 h-4 text-[#D6342C]" />
-          <span>Card Prices</span>
+          <span>Prices</span>
         </button>
 
         <button
@@ -649,6 +635,18 @@ export const AdminPage: React.FC = () => {
           <Mail className="w-4 h-4" />
           <span>Messages ({contactMessages.length})</span>
           {contactMessages.some((m) => !m.isRead) && <span className="w-2 h-2 rounded-full bg-[#D6342C]" />}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('customers')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-t transition-colors ${
+            activeTab === 'customers'
+              ? 'bg-white border-t-2 border-[#D6342C] text-[#0F1B2D] shadow-xs'
+              : 'text-slate-600 hover:text-[#0F1B2D]'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Customers ({registeredCustomers.length})</span>
         </button>
 
         <button
@@ -996,7 +994,7 @@ export const AdminPage: React.FC = () => {
                     <div key={idx} className="p-3 bg-[#FAF8F5] rounded border border-[#E6E0D6] text-xs space-y-2">
                       <div className="flex justify-between font-bold text-[#0F1B2D]">
                         <span>{item.product.name}</span>
-                        <span>{formatLKR(item.lineTotal)}</span>
+                        <span>{formatItemPrice(item)}</span>
                       </div>
                       <div className="text-slate-600 text-[11px]">
                         {item.selectedOptions.map((o) => `${o.groupName}: ${o.valueLabel}`).join(' · ')}
@@ -1061,31 +1059,31 @@ export const AdminPage: React.FC = () => {
       {/* ========================================================================= */}
       {activeTab === 'pricegrid' && (
         <div className="space-y-5">
-          {/* Header: card type + save */}
+          {/* Header: product + save */}
           <div className="bg-white p-5 rounded-lg border border-[#E6E0D6] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-lg font-bold text-[#0F1B2D]">Visiting Card Prices</h3>
-              <p className="text-xs text-slate-500">Choose a paper, change its prices, then press Save.</p>
+              <h3 className="text-lg font-bold text-[#0F1B2D]">Product Prices</h3>
+              <p className="text-xs text-slate-500">
+                Choose a product and option, type the prices, then press Save. Leave a price empty if it is not
+                offered. Products with no prices show <strong>Price on request</strong> to customers.
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex rounded border border-[#E6E0D6] p-0.5 bg-[#FAF8F5]">
-                {(
-                  [
-                    ['prod-vc-double', 'Double Sided'],
-                    ['prod-vc-single', 'Single Sided'],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    onClick={() => setSelectedGridProduct(id)}
-                    className={`px-3 py-1.5 text-xs font-bold rounded transition-colors ${
-                      selectedGridProduct === id ? 'bg-[#0F1B2D] text-white' : 'text-slate-600 hover:text-[#0F1B2D]'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <select
+                aria-label="Product"
+                value={selectedGridProduct}
+                onChange={(e) => setSelectedGridProduct(e.target.value)}
+                className="p-2 text-xs font-semibold bg-[#FAF8F5] border border-[#E6E0D6] rounded max-w-[260px]"
+              >
+                {products
+                  .filter((p) => (p.optionGroups?.length ?? 0) >= 2)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                      {getFromPrice(p.id) ? '' : ' — on request'}
+                    </option>
+                  ))}
+              </select>
               <button
                 onClick={handleSavePrices}
                 disabled={!pricesDirty || isSavingPrices}
@@ -1110,61 +1108,68 @@ export const AdminPage: React.FC = () => {
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-            {/* Step 1: paper */}
+            {/* Step 1: first option (paper / size ...) */}
             <div className="lg:col-span-4 bg-white rounded-lg border border-[#E6E0D6] shadow-xs overflow-hidden">
               <div className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-[#E6E0D6]">
-                1. Choose paper
+                1. Choose {gridProduct?.optionGroups?.[0]?.name ?? 'option'}
               </div>
-              {VISITING_CARD_PAPERS.map((paper) => {
-                const isSelected = gridPaperId === paper.id;
+              {gridRows.map((row) => {
+                const isSelected = activeRowId === row.id;
+                const from = rowFromPrice(row.id);
                 return (
                   <button
-                    key={paper.id}
-                    onClick={() => setGridPaperId(paper.id)}
+                    key={row.id}
+                    onClick={() => setGridPaperId(row.id)}
                     className={`w-full text-left px-4 py-2.5 text-xs border-b border-[#F0EBE1] last:border-0 flex justify-between items-center gap-3 transition-colors ${
                       isSelected ? 'bg-[#0F1B2D] text-white' : 'text-[#0F1B2D] hover:bg-[#FAF8F5]'
                     }`}
                   >
-                    <span className="font-semibold">{paper.label}</span>
+                    <span className="font-semibold">{row.label}</span>
                     <span className={`shrink-0 text-[11px] ${isSelected ? 'text-slate-300' : 'text-slate-400'}`}>
-                      from {formatLKR(gridPrice(paper.id, VISITING_CARD_QUANTITIES[0].id))}
+                      {from != null ? `from ${formatLKR(from)}` : 'no prices'}
                     </span>
                   </button>
                 );
               })}
             </div>
 
-            {/* Step 2: prices for that paper */}
+            {/* Step 2: prices for that option */}
             <div className="lg:col-span-8 bg-white rounded-lg border border-[#E6E0D6] shadow-xs overflow-hidden">
               <div className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-[#E6E0D6]">
-                2. Set prices — {VISITING_CARD_PAPERS.find((p) => p.id === gridPaperId)?.label}
+                2. Set prices — {gridRows.find((r) => r.id === activeRowId)?.label}
               </div>
               <table className="w-full text-xs">
                 <thead className="text-[10px] uppercase text-slate-500 bg-[#FAF8F5]">
                   <tr>
-                    <th className="px-4 py-2 text-left">Quantity</th>
+                    <th className="px-4 py-2 text-left">{gridProduct?.optionGroups?.[1]?.name ?? 'Quantity'}</th>
                     <th className="px-4 py-2 text-left">Price (Rs.)</th>
-                    <th className="px-4 py-2 text-right">Per card</th>
+                    <th className="px-4 py-2 text-right">Per unit</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {VISITING_CARD_QUANTITIES.map((qty) => {
-                    const price = gridPrice(gridPaperId, qty.id);
+                  {gridCols.map((col) => {
+                    const price = gridPrice(activeRowId, col.id);
+                    const units = unitCount(col.label);
                     return (
-                      <tr key={qty.id} className="hover:bg-[#FAF8F5]">
-                        <td className="px-4 py-1.5 font-semibold text-[#0F1B2D]">{qty.label}</td>
+                      <tr key={col.id} className="hover:bg-[#FAF8F5]">
+                        <td className="px-4 py-1.5 font-semibold text-[#0F1B2D]">{col.label}</td>
                         <td className="px-4 py-1.5">
                           <input
                             type="number"
                             min="0"
                             step="50"
-                            aria-label={`Price for ${qty.label}`}
-                            value={price}
-                            onChange={(e) => setGridPrice(gridPaperId, qty.id, parseFloat(e.target.value) || 0)}
+                            placeholder="Not offered"
+                            aria-label={`Price for ${col.label}`}
+                            value={price ?? ''}
+                            onChange={(e) =>
+                              setGridPrice(activeRowId, col.id, e.target.value === '' ? null : parseFloat(e.target.value) || 0)
+                            }
                             className="w-32 p-1.5 font-bold text-slate-800 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:border-[#0F1B2D] outline-hidden"
                           />
                         </td>
-                        <td className="px-4 py-1.5 text-right text-slate-500">{formatLKR(price / qty.count)}</td>
+                        <td className="px-4 py-1.5 text-right text-slate-500">
+                          {price != null && units > 0 ? formatLKR(price / units) : '—'}
+                        </td>
                       </tr>
                     );
                   })}
@@ -1187,13 +1192,13 @@ export const AdminPage: React.FC = () => {
                   onClick={() => applyPercent('paper')}
                   className="px-3 py-1.5 bg-white border border-[#0F1B2D] text-[#0F1B2D] font-semibold rounded hover:bg-slate-50"
                 >
-                  This paper
+                  This option
                 </button>
                 <button
                   onClick={() => applyPercent('all')}
                   className="px-3 py-1.5 bg-[#0F1B2D] text-white font-semibold rounded hover:bg-[#182A45]"
                 >
-                  All papers
+                  All options
                 </button>
                 <span className="text-slate-400">Use a minus number to lower prices, e.g. -5</span>
               </div>
@@ -1220,7 +1225,7 @@ export const AdminPage: React.FC = () => {
                 <Upload className="w-3.5 h-3.5" />
                 Import CSV
               </button>
-              <span className="text-slate-400">Edit all 126 prices in Excel, then paste them back.</span>
+              <span className="text-slate-400">Edit this product's whole price table in Excel, then paste it back.</span>
             </div>
           </details>
 
@@ -1230,7 +1235,7 @@ export const AdminPage: React.FC = () => {
               <div className="bg-white rounded-lg max-w-lg w-full p-6 space-y-4 shadow-xl">
                 <div className="flex justify-between items-center border-b border-[#E6E0D6] pb-2">
                   <h4 className="font-bold text-sm text-[#0F1B2D]">
-                    Import CSV to {selectedGridProduct} Matrix
+                    Import CSV prices for {gridProduct?.name}
                   </h4>
                   <button
                     onClick={() => setShowCsvModal(false)}
@@ -1240,7 +1245,7 @@ export const AdminPage: React.FC = () => {
                   </button>
                 </div>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Paste comma-separated spreadsheet values. Header must include paper stock followed by quantities (100, 200, ...).
+                  Paste the CSV exported above (after editing). First column = option names, header row = quantities. Leave a cell empty for "not offered".
                 </p>
                 <textarea
                   rows={8}
@@ -1375,7 +1380,7 @@ export const AdminPage: React.FC = () => {
                           {p.categoryName || 'General'}
                         </span>
                         <span className="text-xs font-bold text-[#0F1B2D]">
-                          From {formatLKR(p.basePrice)}
+                          {getFromPrice(p.id) ? `From ${formatLKR(getFromPrice(p.id))}` : 'Price on request'}
                         </span>
                       </div>
 
@@ -1851,6 +1856,71 @@ export const AdminPage: React.FC = () => {
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'customers' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-lg border border-[#E6E0D6] text-xs">
+            <div className="relative flex-grow max-w-md">
+              <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="search"
+                placeholder="Search name, email or phone…"
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+                className="w-full pl-8 pr-2 py-2 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden"
+              />
+            </div>
+            <span className="text-slate-500">
+              <strong className="text-[#0F1B2D]">{registeredCustomers.length}</strong> registered customers
+            </span>
+          </div>
+
+          <div className="bg-white rounded-lg border border-[#E6E0D6] shadow-xs overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#FAF8F5] border-b border-[#E6E0D6] text-slate-500 uppercase text-[10px]">
+                <tr>
+                  <th className="p-3">Customer</th>
+                  <th className="p-3">Email</th>
+                  <th className="p-3">Phone</th>
+                  <th className="p-3">Orders</th>
+                  <th className="p-3">Joined</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {registeredCustomers
+                  .filter((c) => {
+                    const q = customerSearch.trim().toLowerCase();
+                    return !q || [c.fullName, c.email, c.phone].some((v) => v?.toLowerCase().includes(q));
+                  })
+                  .map((c) => (
+                    <tr key={c.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-bold text-[#0F1B2D]">{c.fullName || '—'}</td>
+                      <td className="p-3">
+                        <a href={`mailto:${c.email}`} className="hover:underline">{c.email}</a>
+                      </td>
+                      <td className="p-3">
+                        {c.phone ? (
+                          <a href={getWhatsAppUrl(c.phone, `Hi ${c.fullName || ''}, this is Ai Printing Solutions.`)} target="_blank" rel="noopener noreferrer" className="text-[#128C7E] hover:underline">
+                            {c.phone}
+                          </a>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="p-3">{orders.filter((o) => o.userId === c.id).length}</td>
+                      <td className="p-3 text-slate-500">{new Date(c.createdAt).toLocaleDateString('en-GB')}</td>
+                    </tr>
+                  ))}
+                {registeredCustomers.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-slate-500">No registered customers yet.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

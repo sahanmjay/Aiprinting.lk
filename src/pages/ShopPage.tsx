@@ -6,7 +6,7 @@ import { formatLKR } from '../lib/formatters';
 
 export const ShopPage: React.FC = () => {
   const { category: categorySlug } = useParams<{ category?: string }>();
-  const { products, categories } = useStore();
+  const { products, categories, getFromPrice } = useStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSort, setSelectedSort] = useState<'featured' | 'price-asc' | 'price-desc'>('featured');
 
@@ -31,11 +31,14 @@ export const ShopPage: React.FC = () => {
       }
       return true;
     }).sort((a, b) => {
-      if (selectedSort === 'price-asc') return a.basePrice - b.basePrice;
-      if (selectedSort === 'price-desc') return b.basePrice - a.basePrice;
+      // "Price on request" (0) products go last in both price sorts
+      const pa = getFromPrice(a.id) || Infinity;
+      const pb = getFromPrice(b.id) || Infinity;
+      if (selectedSort === 'price-asc') return pa - pb;
+      if (selectedSort === 'price-desc') return (pb === Infinity ? -1 : pb) - (pa === Infinity ? -1 : pa);
       return (b.isHot ? 1 : 0) - (a.isHot ? 1 : 0);
     });
-  }, [products, categorySlug, currentCategory, searchQuery, selectedSort]);
+  }, [products, categorySlug, currentCategory, searchQuery, selectedSort, getFromPrice]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-8">
@@ -208,9 +211,9 @@ export const ShopPage: React.FC = () => {
 
                   <div className="p-4 pt-0 border-t border-slate-100 mt-2 flex items-center justify-between">
                     <div>
-                      <div className="text-[10px] text-slate-400 uppercase">From</div>
+                      <div className="text-[10px] text-slate-400 uppercase">{getFromPrice(prod.id) ? 'From' : 'Price'}</div>
                       <div className="text-sm font-bold text-[#0F1B2D]">
-                        {formatLKR(prod.basePrice)}
+                        {getFromPrice(prod.id) ? formatLKR(getFromPrice(prod.id)) : 'On request'}
                       </div>
                     </div>
                     <Link

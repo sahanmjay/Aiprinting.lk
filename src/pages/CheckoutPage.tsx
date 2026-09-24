@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   ShieldCheck,
   Truck,
@@ -14,23 +14,25 @@ import {
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { uploadFile } from '../lib/supabase';
-import { formatLKR, isValidSriLankanPhone } from '../lib/formatters';
+import { formatLKR, formatItemPrice, isValidSriLankanPhone } from '../lib/formatters';
 import { SRI_LANKA_DISTRICTS } from '../data/seedData';
 import { PaymentMethod } from '../types';
 
 export const CheckoutPage: React.FC = () => {
-  const { cart, cartSubtotal, cartTotal, siteSettings, createOrder } = useStore();
+  const { cart, cartSubtotal, cartTotal, siteSettings, createOrder, customer } = useStore();
   const navigate = useNavigate();
 
   // Form Fields
-  const [customerName, setCustomerName] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState(customer?.name ?? '');
+  const [customerEmail, setCustomerEmail] = useState(customer?.email ?? '');
+  const [customerPhone, setCustomerPhone] = useState(customer?.phone ?? '');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('Colombo');
   const [specialInstructions, setSpecialInstructions] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('payhere');
+  // Items without a price yet are confirmed by staff first, so they can't be paid by card now
+  const hasPriceToConfirm = cart.some((i) => i.priceToConfirm);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(hasPriceToConfirm ? 'cod' : 'payhere');
 
   // Bank Transfer slip upload state
   const [bankSlipName, setBankSlipName] = useState<string>('');
@@ -186,6 +188,20 @@ export const CheckoutPage: React.FC = () => {
               <span>Contact Information</span>
             </h3>
 
+            {customer ? (
+              <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded p-2.5">
+                Signed in as <strong>{customer.email}</strong> — this order will appear under My Account.
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500">
+                Have an account?{' '}
+                <Link to="/account" className="text-[#D6342C] font-semibold hover:underline">
+                  Sign in
+                </Link>{' '}
+                to keep all your orders in one place — or just continue as a guest.
+              </p>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div className="space-y-1">
                 <label className="font-bold text-slate-700">Full Name *</label>
@@ -303,8 +319,16 @@ export const CheckoutPage: React.FC = () => {
             </h3>
 
             <div className="space-y-3">
+              {hasPriceToConfirm && (
+                <p className="p-3 text-xs bg-amber-50 border border-amber-300 text-amber-900 rounded">
+                  Some items are <strong>price to be confirmed</strong>. We&apos;ll contact you with the final total
+                  before printing, so online card payment isn&apos;t available for this order.
+                </p>
+              )}
+
               {/* PayHere Option */}
               <label
+                hidden={hasPriceToConfirm}
                 className={`p-4 rounded border block cursor-pointer transition-all ${
                   paymentMethod === 'payhere'
                     ? 'border-[#0F1B2D] bg-[#0F1B2D]/5 font-semibold text-[#0F1B2D]'
@@ -457,7 +481,7 @@ export const CheckoutPage: React.FC = () => {
                 <div key={item.id} className="text-xs space-y-0.5 border-b border-slate-100 pb-2">
                   <div className="flex justify-between font-bold text-[#0F1B2D]">
                     <span className="truncate pr-2">{item.product.name}</span>
-                    <span>{formatLKR(item.lineTotal)}</span>
+                    <span>{formatItemPrice(item)}</span>
                   </div>
                   <div className="text-[11px] text-slate-500">
                     {item.selectedOptions.map((o) => o.valueLabel).join(' · ')}
@@ -476,7 +500,7 @@ export const CheckoutPage: React.FC = () => {
                 <span className="font-semibold">{formatLKR(siteSettings.deliveryFee)}</span>
               </div>
               <div className="pt-2 border-t border-[#E6E0D6] flex justify-between items-baseline font-bold text-base text-[#0F1B2D]">
-                <span>Total Amount Due</span>
+                <span>{hasPriceToConfirm ? 'Total so far' : 'Total Amount Due'}</span>
                 <span className="text-[#D6342C] text-lg">{formatLKR(cartTotal)}</span>
               </div>
             </div>

@@ -26,7 +26,7 @@ import { useQuotationPrint, QuotationData, QuotationLine } from '../components/c
 export const ProductDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const { products, getPriceForOptions, addToCart, siteSettings } = useStore();
+  const { products, categories, priceMatrix, getPriceForOptions, getFromPrice, addToCart, siteSettings } = useStore();
 
   const product = useMemo(() => {
     return products.find((p) => p.slug === slug) || products[0];
@@ -66,8 +66,17 @@ export const ProductDetailPage: React.FC = () => {
   const { printQuotation, quotationDoc } = useQuotationPrint(siteSettings);
 
   // Price Calculation
-  const selectedPaper = paperGroup?.values.find((v) => v.id === selectedPaperId);
-  const selectedQty = qtyGroup?.values.find((v) => v.id === selectedQtyId);
+  // Only offer combinations that have a price. A product with no prices at all is "price on request".
+  const cells = priceMatrix[product.id] ?? [];
+  const isPriced = cells.length > 0;
+  const rowOptions = (paperGroup?.values ?? []).filter((v) => !isPriced || cells.some((c) => c.optionValueA === v.id));
+  const paperId = rowOptions.some((v) => v.id === selectedPaperId) ? selectedPaperId : (rowOptions[0]?.id ?? '');
+  const qtyOptions = (qtyGroup?.values ?? []).filter(
+    (v) => !isPriced || cells.some((c) => c.optionValueA === paperId && c.optionValueB === v.id)
+  );
+  const qtyId = qtyOptions.some((v) => v.id === selectedQtyId) ? selectedQtyId : (qtyOptions[0]?.id ?? '');
+  const selectedPaper = paperGroup?.values.find((v) => v.id === paperId);
+  const selectedQty = qtyGroup?.values.find((v) => v.id === qtyId);
 
   // Extract quantity number (e.g. "1,000 Cards" -> 1000)
   const quantityCount = useMemo(() => {
@@ -78,9 +87,9 @@ export const ProductDetailPage: React.FC = () => {
 
   const baseOptionPrice = useMemo(() => {
     if (!product.isVariable) return product.basePrice;
-    if (!selectedPaperId || !selectedQtyId) return 0;
-    return getPriceForOptions(product.id, selectedPaperId, selectedQtyId);
-  }, [product, selectedPaperId, selectedQtyId, getPriceForOptions]);
+    if (!paperId || !qtyId) return 0;
+    return getPriceForOptions(product.id, paperId, qtyId);
+  }, [product, paperId, qtyId, getPriceForOptions]);
 
   const designFee = artworkType === 'design' ? 500 : 0;
   const totalPrice = baseOptionPrice + designFee;
@@ -154,7 +163,8 @@ export const ProductDetailPage: React.FC = () => {
       artworkType,
       artworkFiles,
       specialInstructions,
-      lineTotal: totalPrice,
+      lineTotal: isPriced ? totalPrice : 0,
+      priceToConfirm: !isPriced,
     };
 
     addToCart(newItem);
@@ -169,14 +179,14 @@ export const ProductDetailPage: React.FC = () => {
     details.push(artworkType === 'design' ? 'Artwork: designed by Ai Printing' : 'Artwork: supplied by customer (print-ready)');
 
     const lines: QuotationLine[] = [
-      { description: product.name, details, quantity: selectedQty?.label ?? '1', amount: baseOptionPrice },
+      { description: product.name, details, quantity: selectedQty?.label ?? '1', amount: isPriced ? baseOptionPrice : undefined },
     ];
     if (artworkType === 'design') {
       lines.push({
         description: 'Professional Artwork Design',
         details: ['In-house layout design with digital PDF proof'],
         quantity: '1',
-        amount: designFee,
+        amount: isPriced ? designFee : undefined,
       });
     }
 
@@ -195,15 +205,15 @@ export const ProductDetailPage: React.FC = () => {
 
   // Build WhatsApp pre-filled configuration message
   const whatsappMessage = useMemo(() => {
-    let msg = `Hi Ai Printing Solutions! I'd like to order:\n\n*Product:* ${product.name}\n`;
-    if (selectedPaper) msg += `*Paper Stock:* ${selectedPaper.label}\n`;
-    if (selectedQty) msg += `*Quantity:* ${selectedQty.label}\n`;
+    let msg = `Hi Ai Printing Solutions! I'd like ${isPriced ? 'to order' : 'a price for'}:\n\n*Product:* ${product.name}\n`;
+    if (paperGroup && selectedPaper) msg += `*${paperGroup.name}:* ${selectedPaper.label}\n`;
+    if (qtyGroup && selectedQty) msg += `*${qtyGroup.name}:* ${selectedQty.label}\n`;
     msg += `*Artwork Option:* ${artworkType === 'design' ? 'Design it for me (+Rs. 500)' : 'I have artwork'}\n`;
-    msg += `*Estimated Total:* ${formatLKR(totalPrice)} (excl. delivery)\n`;
+    if (isPriced) msg += `*Estimated Total:* ${formatLKR(totalPrice)} (excl. delivery)\n`;
     if (specialInstructions) msg += `*Notes:* ${specialInstructions}\n`;
     msg += `\nPlease confirm production turnaround. Thank you!`;
     return msg;
-  }, [product, selectedPaper, selectedQty, artworkType, totalPrice, specialInstructions]);
+  }, [product, paperGroup, qtyGroup, selectedPaper, selectedQty, artworkType, totalPrice, specialInstructions, isPriced]);
 
   // Related products
   const relatedProducts = products
@@ -223,7 +233,7 @@ export const ProductDetailPage: React.FC = () => {
             </Link>
           ) : (
             <>
-              <div className="text-lg font-bold text-[#0F1B2D] leading-tight">{formatLKR(totalPrice)}</div>
+              <div className="text-lg font-bold text-[#0F1B2D] leading-tight">{isPriced ? formatLKR(totalPrice) : 'Price to be confirmed'}</div>
               <div className="text-xs text-slate-500 truncate">{selectedQty?.label ?? product.name}</div>
             </>
           )}
@@ -239,7 +249,7 @@ export const ProductDetailPage: React.FC = () => {
         </a>
         <button
           onClick={handleAddToCart}
-          disabled={isUploading || totalPrice <= 0}
+          disabled={isUploading || (isPriced && totalPrice <= 0)}
           className="shrink-0 h-12 px-5 bg-[#D6342C] hover:bg-[#B8251E] text-white font-bold text-sm rounded-full flex items-center gap-2 disabled:opacity-60"
         >
           <ShoppingBag className="w-4 h-4" />
@@ -252,7 +262,7 @@ export const ProductDetailPage: React.FC = () => {
         <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
         <Link to="/shop" className="hover:text-[#0F1B2D]">Shop</Link>
         <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-        <Link to={`/shop/${product.categoryId.replace('cat-', '')}`} className="hover:text-[#0F1B2D]">
+        <Link to={`/shop/${categories.find((c) => c.id === product.categoryId)?.slug ?? ''}`} className="hover:text-[#0F1B2D]">
           {product.categoryName || 'Catalogue'}
         </Link>
         <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
@@ -340,9 +350,16 @@ export const ProductDetailPage: React.FC = () => {
           <div className="bg-[#FAF8F5] p-4 rounded border border-[#E6E0D6] flex items-center justify-between">
             <div>
               <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
-                Instant Price
+                {isPriced ? 'Instant Price' : 'Price'}
               </div>
-              {selectedPaperId && selectedQtyId ? (
+              {!isPriced ? (
+                <div>
+                  <div className="text-2xl sm:text-3xl font-bold text-[#0F1B2D]">Price to be confirmed</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    Add to cart and order — we&apos;ll confirm the final price with you before printing.
+                  </div>
+                </div>
+              ) : paperId && qtyId ? (
                 <div className="flex items-baseline gap-2">
                   <span className="text-2xl sm:text-3xl font-bold text-[#0F1B2D]">
                     {formatLKR(totalPrice)}
@@ -359,8 +376,12 @@ export const ProductDetailPage: React.FC = () => {
             </div>
 
             <div className="text-right hidden sm:block">
-              <span className="text-[11px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded">
-                Live Matrix Active
+              <span
+                className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
+                  isPriced ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                }`}
+              >
+                {isPriced ? 'Live Price' : 'Quote on request'}
               </span>
             </div>
           </div>
@@ -374,19 +395,19 @@ export const ProductDetailPage: React.FC = () => {
                   <label htmlFor="paper-stock-select" className="font-bold text-[#0F1B2D]">
                     1. Select {paperGroup.name}:
                   </label>
-                  {selectedPaper && (
+                  {selectedPaper?.finishType && (
                     <span className="text-[11px] font-medium text-slate-500">
-                      Finish: <span className="capitalize text-[#D6342C] font-semibold">{selectedPaper.finishType || 'Standard'}</span>
+                      Finish: <span className="capitalize text-[#D6342C] font-semibold">{selectedPaper.finishType}</span>
                     </span>
                   )}
                 </div>
                 <select
                   id="paper-stock-select"
-                  value={selectedPaperId}
+                  value={paperId}
                   onChange={(e) => setSelectedPaperId(e.target.value)}
                   className="w-full p-2.5 text-xs sm:text-sm bg-white border border-[#0F1B2D] rounded font-medium text-[#0F1B2D] focus:ring-1 focus:ring-[#0F1B2D] focus:outline-hidden"
                 >
-                  {paperGroup.values.map((val) => (
+                  {rowOptions.map((val) => (
                     <option key={val.id} value={val.id}>
                       {val.label}
                     </option>
@@ -403,11 +424,11 @@ export const ProductDetailPage: React.FC = () => {
                 </label>
                 <select
                   id="quantity-select"
-                  value={selectedQtyId}
+                  value={qtyId}
                   onChange={(e) => setSelectedQtyId(e.target.value)}
                   className="w-full p-2.5 text-xs sm:text-sm bg-white border border-[#0F1B2D] rounded font-medium text-[#0F1B2D] focus:ring-1 focus:ring-[#0F1B2D] focus:outline-hidden"
                 >
-                  {qtyGroup.values.map((val) => (
+                  {qtyOptions.map((val) => (
                     <option key={val.id} value={val.id}>
                       {val.label}
                     </option>
@@ -604,7 +625,7 @@ export const ProductDetailPage: React.FC = () => {
               className="w-full py-3.5 px-4 bg-[#D6342C] hover:bg-[#B8251E] text-white font-bold text-sm rounded shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 active:scale-99 disabled:opacity-60 disabled:cursor-wait"
             >
               <ShoppingBag className="w-4 h-4" />
-              <span>Add to Cart ({formatLKR(totalPrice)})</span>
+              <span>{isPriced ? `Add to Cart (${formatLKR(totalPrice)})` : 'Add to Cart — price to be confirmed'}</span>
             </button>
 
             <a
@@ -614,14 +635,14 @@ export const ProductDetailPage: React.FC = () => {
               className="w-full py-3 px-4 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs rounded transition-colors flex items-center justify-center gap-2 shadow-xs"
             >
               <MessageCircle className="w-4 h-4" />
-              <span>Order Directly on WhatsApp</span>
+              <span>{isPriced ? 'Order Directly on WhatsApp' : 'Ask for the Price on WhatsApp'}</span>
             </a>
 
             {/* Instant quotation PDF */}
             <details className="group rounded border border-[#E6E0D6] bg-[#FAF8F5] open:bg-white">
               <summary className="cursor-pointer list-none px-4 py-3 text-xs font-bold text-[#0F1B2D] flex items-center justify-center gap-2 hover:text-[#D6342C] transition-colors">
                 <FileDown className="w-4 h-4" />
-                <span>Download a Formal Quotation (PDF)</span>
+                <span>{isPriced ? 'Download a Formal Quotation (PDF)' : 'Download a Quotation Request (PDF)'}</span>
               </summary>
               <div className="px-4 pb-4 space-y-2.5 text-xs">
                 <p className="text-[11px] text-slate-500">
@@ -654,11 +675,15 @@ export const ProductDetailPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleDownloadQuote}
-                  disabled={totalPrice <= 0}
+                  disabled={isPriced && totalPrice <= 0}
                   className="w-full py-2.5 px-4 bg-[#0F1B2D] hover:bg-[#182A45] text-white font-bold text-xs rounded transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
                 >
                   <FileDown className="w-4 h-4" />
-                  <span>Generate Quotation ({formatLKR(totalPrice + siteSettings.deliveryFee)} incl. delivery)</span>
+                  <span>
+                    {isPriced
+                      ? `Generate Quotation (${formatLKR(totalPrice + siteSettings.deliveryFee)} incl. delivery)`
+                      : 'Generate Quotation Request'}
+                  </span>
                 </button>
                 <p className="text-[10px] text-slate-400 text-center">
                   In the print window choose "Save as PDF" as the destination.
@@ -804,7 +829,7 @@ export const ProductDetailPage: React.FC = () => {
                     {rel.name}
                   </h4>
                   <div className="text-xs font-semibold text-slate-500 mt-1">
-                    From {formatLKR(rel.basePrice)}
+                    {getFromPrice(rel.id) ? `From ${formatLKR(getFromPrice(rel.id))}` : 'Price on request'}
                   </div>
                 </div>
               </Link>

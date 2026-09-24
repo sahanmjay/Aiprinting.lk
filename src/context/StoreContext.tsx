@@ -1,9 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import type { User } from '@supabase/supabase-js';
 import {
   Product,
   Category,
   CartItem,
   Order,
+  Customer,
+  RegisteredCustomer,
   Quotation,
   ContactMessage,
   SiteSettings,
@@ -14,9 +17,7 @@ import {
   SEED_PRODUCTS,
   SEED_CATEGORIES,
   DEFAULT_SITE_SETTINGS,
-  generateCardPriceMatrix,
-  VISITING_CARD_PAPERS,
-  VISITING_CARD_QUANTITIES,
+  SEED_PRICE_MATRIX,
 } from '../data/seedData';
 import { generateOrderNumber, generateQuoteNumber } from '../lib/formatters';
 import { supabase, toRow, fromRow } from '../lib/supabase';
@@ -29,6 +30,7 @@ interface StoreContextType {
   orders: Order[];
   quotations: Quotation[];
   contactMessages: ContactMessage[];
+  registeredCustomers: RegisteredCustomer[]; // admin only
   priceMatrix: Record<string, PriceMatrixCell[]>; // keyed by productId
   isAdminLoggedIn: boolean;
 
@@ -56,8 +58,9 @@ interface StoreContextType {
   markMessageRead: (msgId: string) => Promise<void>;
 
   // Price Grid Admin Features
-  getPriceForOptions: (productId: string, paperId: string, qtyId?: string) => number;
-  updatePriceCell: (productId: string, paperId: string, qtyId: string, newPrice: number) => void;
+  getPriceForOptions: (productId: string, rowId: string, colId?: string) => number; // 0 = not priced
+  getFromPrice: (productId: string) => number; // lowest price; 0 = price on request
+  updatePriceCell: (productId: string, rowId: string, colId: string, newPrice: number | null) => void; // null = remove
   bulkAdjustGridPrices: (productId: string, percentIncrease: number) => void;
   exportGridCSV: (productId: string) => string;
   importGridCSV: (productId: string, csvText: string) => boolean;
@@ -72,12 +75,22 @@ interface StoreContextType {
   logoutAdmin: () => Promise<void>;
   refreshAdminData: () => Promise<void>;
   savePriceMatrix: () => Promise<string | null>; // null = saved, else error message
+
+  // Customer accounts (Supabase Auth, email + password)
+  customer: Customer | null;
+  customerOrders: Order[];
+  isPasswordRecovery: boolean; // opened a "reset password" email link
+  signUpCustomer: (d: { name: string; email: string; phone: string; password: string }) => Promise<{ error: string | null; needsConfirmation: boolean }>;
+  signInCustomer: (email: string, password: string) => Promise<string | null>;
+  signOutCustomer: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<string | null>;
+  setNewPassword: (password: string) => Promise<string | null>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 // Bump when SEED_PRODUCTS changes so browsers drop their stale saved copy.
-const PRODUCTS_KEY = 'aiprint_products_v2';
+const PRODUCTS_KEY = 'aiprint_products_v3';
 
 // Corrupt or missing localStorage must never blank the whole site.
 function load<T>(key: string, fallback: () => T): T {
@@ -121,13 +134,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [adminOrders, setAdminOrders] = useState<Order[]>([]);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [contactMessages, setContactMessages] = useState<ContactMessage[]>([]);
+  const [registeredCustomers, setRegisteredCustomers] = useState<RegisteredCustomer[]>([]);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   // Price matrix keyed by productId
-  const [priceMatrix, setPriceMatrix] = useState<Record<string, PriceMatrixCell[]>>(() => ({
-    'prod-vc-double': generateCardPriceMatrix('prod-vc-double', true),
-    'prod-vc-single': generateCardPriceMatrix('prod-vc-single', false),
-  }));
+  const [priceMatrix, setPriceMatrix] = useState<Record<string, PriceMatrixCell[]>>(SEED_PRICE_MATRIX);
 
   // Persist changes
   useEffect(() => save('aiprint_cart', cart), [cart]);
@@ -141,7 +155,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .eq('key', 'price_matrix')
       .maybeSingle()
       .then(({ data }) => {
-        if (data?.value) setPriceMatrix(data.value as Record<string, PriceMatrixCell[]>);
+        // Merge per product so products never saved by staff keep their built-in prices
+        if (data?.value) setPriceMatrix((prev) => ({ ...prev, ...(data.value as Record<string, PriceMatrixCell[]>) }));
       });
   }, []);
 
@@ -154,30 +169,91 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => save('aiprint_settings', siteSettings), [siteSettings]);
   useEffect(() => save(PRODUCTS_KEY, products), [products]);
 
-  // Admin session: a Supabase Auth user who is listed in admin_users
+  // Session: any signed-in Supabase user is a customer; admins are also listed in admin_users
   useEffect(() => {
     const check = async () => {
       const { data } = await supabase.rpc('is_admin');
       setIsAdminLoggedIn(data === true);
     };
+    const toCustomer = (user?: User | null): Customer | null =>
+      user
+        ? { id: user.id, email: user.email ?? '', name: user.user_metadata?.full_name ?? '', phone: user.user_metadata?.phone ?? '' }
+        : null;
+    supabase.auth.getSession().then(({ data }) => setCustomer(toCustomer(data.session?.user)));
     check();
     // Supabase warns against awaiting its own calls inside this callback, so defer the check.
-    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      setCustomer(toCustomer(session?.user));
+      if (event === 'PASSWORD_RECOVERY') setIsPasswordRecovery(true);
       setTimeout(check, 0);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // A signed-in customer's own orders (row level security only returns their rows)
+  const customerId = customer?.id;
+  useEffect(() => {
+    if (!customerId) {
+      setCustomerOrders([]);
+      return;
+    }
+    supabase
+      .from('orders')
+      .select('*')
+      .eq('user_id', customerId)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) console.error('Could not load your orders:', error);
+        setCustomerOrders((data ?? []).map((row) => fromRow<Order>(row)));
+      });
+  }, [customerId]);
+
+  const signUpCustomer = async (d: { name: string; email: string; phone: string; password: string }) => {
+    const { data, error } = await supabase.auth.signUp({
+      email: d.email.trim().toLowerCase(),
+      password: d.password,
+      options: { data: { full_name: d.name.trim(), phone: d.phone.trim() }, emailRedirectTo: `${window.location.origin}/account` },
+    });
+    if (error) {
+      const message = /already registered|already exists/i.test(error.message)
+        ? 'An account with this email already exists — please sign in instead.'
+        : error.message;
+      return { error: message, needsConfirmation: false };
+    }
+    return { error: null, needsConfirmation: !data.session }; // no session = "confirm your email" is switched on
+  };
+
+  const signInCustomer = async (email: string, password: string): Promise<string | null> => {
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    if (!error) return null;
+    if (error.message === 'Invalid login credentials') return 'Wrong email or password.';
+    if (/not confirmed/i.test(error.message)) return 'Please confirm your email first — check your inbox for the link we sent.';
+    return error.message;
+  };
+
+  const sendPasswordReset = async (email: string): Promise<string | null> => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/account` });
+    return error ? error.message : null;
+  };
+
+  const setNewPassword = async (password: string): Promise<string | null> => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (!error) setIsPasswordRecovery(false);
+    return error ? error.message : null;
+  };
+
   const refreshAdminData = async () => {
-    const [o, q, m] = await Promise.all([
+    const [o, q, m, c] = await Promise.all([
       supabase.from('orders').select('*').order('created_at', { ascending: false }),
       supabase.from('quotations').select('*').order('created_at', { ascending: false }),
       supabase.from('contact_messages').select('*').order('created_at', { ascending: false }),
+      supabase.from('customers').select('*').order('created_at', { ascending: false }),
     ]);
-    for (const res of [o, q, m]) if (res.error) console.error('Admin data load failed:', res.error);
+    for (const res of [o, q, m, c]) if (res.error) console.error('Admin data load failed:', res.error);
     setAdminOrders((o.data ?? []).map((row) => fromRow<Order>(row)));
     setQuotations((q.data ?? []).map((row) => fromRow<Quotation>(row)));
     setContactMessages((m.data ?? []).map((row) => fromRow<ContactMessage>(row)));
+    setRegisteredCustomers((c.data ?? []).map((row) => fromRow<RegisteredCustomer>(row)));
   };
 
   useEffect(() => {
@@ -199,7 +275,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const cartCount = cart.length;
   const cartSubtotal = cart.reduce((sum, item) => sum + item.lineTotal, 0);
-  const cartTotal = cartSubtotal > 0 ? cartSubtotal + siteSettings.deliveryFee : 0;
+  const cartTotal = cart.length > 0 ? cartSubtotal + siteSettings.deliveryFee : 0;
 
   // Order Placement
   const createOrder = async (
@@ -215,6 +291,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ...orderData,
       items,
       id: `ord-${crypto.randomUUID()}`,
+      userId: customer?.id,
       orderNumber: '',
       createdAt: now,
       updatedAt: now,
@@ -226,6 +303,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (error.code !== UNIQUE_VIOLATION || attempt === 3) throw error;
     }
     setOrders((prev) => [newOrder, ...prev]);
+    if (customer) setCustomerOrders((prev) => [newOrder, ...prev]);
     clearCart();
     return newOrder;
   };
@@ -322,24 +400,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Price Matrix Calculation & Administration
-  const getPriceForOptions = (productId: string, paperId: string, qtyId?: string): number => {
-    const matrix = priceMatrix[productId];
-    if (!matrix || matrix.length === 0) {
-      // Fallback base
-      const prod = products.find((p) => p.id === productId);
-      return prod ? prod.basePrice : 1000;
-    }
-    const match = matrix.find((c) => c.optionValueA === paperId && (!qtyId || c.optionValueB === qtyId));
-    return match ? match.price : 1000;
+  const getPriceForOptions = (productId: string, rowId: string, colId?: string): number => {
+    const match = priceMatrix[productId]?.find((c) => c.optionValueA === rowId && (!colId || c.optionValueB === colId));
+    return match ? match.price : 0;
   };
 
-  const updatePriceCell = (productId: string, paperId: string, qtyId: string, newPrice: number) => {
+  const getFromPrice = (productId: string): number => {
+    const cells = priceMatrix[productId] ?? [];
+    return cells.length ? Math.min(...cells.map((c) => c.price)) : 0;
+  };
+
+  const updatePriceCell = (productId: string, rowId: string, colId: string, newPrice: number | null) => {
     setPriceMatrix((prev) => {
-      const currentCells = prev[productId] || [];
-      const updated = currentCells.map((c) =>
-        c.optionValueA === paperId && c.optionValueB === qtyId ? { ...c, price: Math.max(0, newPrice) } : c
-      );
-      return { ...prev, [productId]: updated };
+      const others = (prev[productId] || []).filter((c) => !(c.optionValueA === rowId && c.optionValueB === colId));
+      if (newPrice == null) return { ...prev, [productId]: others };
+      const cell: PriceMatrixCell = {
+        id: `pm-${productId}-${rowId}-${colId}`,
+        productId,
+        optionValueA: rowId,
+        optionValueB: colId,
+        price: Math.max(0, newPrice),
+        isActive: true,
+      };
+      return { ...prev, [productId]: [...others, cell] };
     });
   };
 
@@ -355,58 +438,61 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   };
 
+  // CSV: first column = the product's first option (e.g. paper), one column per second option (e.g. quantity).
+  // Empty cell = not offered / price on request.
   const exportGridCSV = (productId: string): string => {
-    const matrix = priceMatrix[productId] || [];
-    // Header: Paper Stock, 100, 200, 300, ...
-    const headers = ['Paper Stock', ...VISITING_CARD_QUANTITIES.map((q) => q.label)];
-    const rows: string[] = [headers.join(',')];
-
-    for (const paper of VISITING_CARD_PAPERS) {
-      const rowVals: (string | number)[] = [`"${paper.label}"`];
-      for (const qty of VISITING_CARD_QUANTITIES) {
-        const cell = matrix.find((c) => c.optionValueA === paper.id && c.optionValueB === qty.id);
-        rowVals.push(cell ? cell.price : 0);
-      }
-      rows.push(rowVals.join(','));
+    const product = products.find((p) => p.id === productId);
+    const [rowGroup, colGroup] = product?.optionGroups ?? [];
+    if (!rowGroup || !colGroup) return '';
+    const q = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const lines = [[q(rowGroup.name), ...colGroup.values.map((v) => q(v.label))].join(',')];
+    for (const row of rowGroup.values) {
+      const cells = colGroup.values.map((col) => String(getPriceForOptions(productId, row.id, col.id) || ''));
+      lines.push([q(row.label), ...cells].join(','));
     }
-    return rows.join('\n');
+    return lines.join('\n');
   };
 
   const importGridCSV = (productId: string, csvText: string): boolean => {
-    try {
-      const lines = csvText.split('\n').map((l) => l.trim()).filter(Boolean);
-      if (lines.length < 2) return false;
-      // Parse rows
-      const matrix = [...(priceMatrix[productId] || [])];
-      for (let i = 1; i < lines.length; i++) {
-        const parts = lines[i].split(',');
-        if (parts.length < 2) continue;
-        const paperLabel = parts[0].replace(/"/g, '').trim();
-        const paper = VISITING_CARD_PAPERS.find((p) => p.label.toLowerCase() === paperLabel.toLowerCase());
-        if (!paper) continue;
-
-        for (let qIdx = 0; qIdx < VISITING_CARD_QUANTITIES.length; qIdx++) {
-          const qty = VISITING_CARD_QUANTITIES[qIdx];
-          const valStr = parts[qIdx + 1];
-          if (valStr) {
-            const price = parseFloat(valStr);
-            if (!isNaN(price)) {
-              const cellIdx = matrix.findIndex(
-                (c) => c.optionValueA === paper.id && c.optionValueB === qty.id
-              );
-              if (cellIdx >= 0) {
-                matrix[cellIdx].price = price;
-              }
-            }
-          }
-        }
+    const product = products.find((p) => p.id === productId);
+    const [rowGroup, colGroup] = product?.optionGroups ?? [];
+    if (!rowGroup || !colGroup) return false;
+    const parseLine = (line: string) => {
+      const out: string[] = [];
+      let cur = '';
+      let quoted = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (quoted) {
+          if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+          else if (ch === '"') quoted = false;
+          else cur += ch;
+        } else if (ch === '"') quoted = true;
+        else if (ch === ',') { out.push(cur); cur = ''; }
+        else cur += ch;
       }
-      setPriceMatrix((prev) => ({ ...prev, [productId]: matrix }));
-      return true;
-    } catch (e) {
-      console.error('Failed to import CSV:', e);
-      return false;
+      out.push(cur);
+      return out.map((v) => v.trim());
+    };
+    const lines = csvText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length < 2) return false;
+    const header = parseLine(lines[0]);
+    const colIds = header.slice(1).map((label) => colGroup.values.find((v) => v.label.toLowerCase() === label.toLowerCase())?.id);
+    if (colIds.every((id) => !id)) return false;
+    let matched = 0;
+    for (const line of lines.slice(1)) {
+      const parts = parseLine(line);
+      const row = rowGroup.values.find((v) => v.label.toLowerCase() === parts[0].toLowerCase());
+      if (!row) continue;
+      matched++;
+      colIds.forEach((colId, i) => {
+        if (!colId) return;
+        const value = parts[i + 1] ?? '';
+        const price = parseFloat(value.replace(/,/g, ''));
+        updatePriceCell(productId, row.id, colId, value === '' || isNaN(price) ? null : price);
+      });
     }
+    return matched > 0;
   };
 
   const addProduct = (productData: Omit<Product, 'id' | 'createdAt'>): Product => {
@@ -460,12 +546,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return null;
   };
 
+  // One sign-out for staff and customers (it is the same Supabase session)
   const logoutAdmin = async () => {
     await supabase.auth.signOut();
+    setIsPasswordRecovery(false);
     setIsAdminLoggedIn(false);
     setAdminOrders([]);
     setQuotations([]);
     setContactMessages([]);
+    setRegisteredCustomers([]);
   };
 
   return (
@@ -478,6 +567,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         orders: isAdminLoggedIn ? adminOrders : orders,
         quotations,
         contactMessages,
+        registeredCustomers,
         priceMatrix,
         isAdminLoggedIn,
         addToCart,
@@ -496,6 +586,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         sendContactMessage,
         markMessageRead,
         getPriceForOptions,
+        getFromPrice,
         updatePriceCell,
         bulkAdjustGridPrices,
         exportGridCSV,
@@ -509,6 +600,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         logoutAdmin,
         refreshAdminData,
         savePriceMatrix,
+        customer,
+        customerOrders,
+        isPasswordRecovery,
+        signUpCustomer,
+        signInCustomer,
+        signOutCustomer: logoutAdmin,
+        sendPasswordReset,
+        setNewPassword,
       }}
     >
       {children}

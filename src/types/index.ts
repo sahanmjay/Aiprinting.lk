@@ -107,14 +107,32 @@ export interface CartItem {
   artworkFiles: UploadedArtwork[];
   specialInstructions?: string;
   lineTotal: number;
+  priceToConfirm?: boolean; // product had no price yet — staff confirm it before printing
 }
 
 export type OrderStatus = 'new' | 'confirmed' | 'in_production' | 'ready' | 'delivered' | 'cancelled';
 export type PaymentMethod = 'payhere' | 'bank_transfer' | 'cod';
 export type PaymentStatus = 'pending' | 'paid' | 'verification_needed' | 'failed';
 
+export interface Customer {
+  id: string;
+  email: string;
+  name: string;
+  phone: string;
+}
+
+// A row of public.customers (admin Customers tab)
+export interface RegisteredCustomer {
+  id: string;
+  email: string;
+  fullName?: string;
+  phone?: string;
+  createdAt: string;
+}
+
 export interface Order {
   id: string;
+  userId?: string; // set when the customer was signed in
   orderNumber: string; // e.g. AIP-2026-0142
   customerName: string;
   customerEmail: string;

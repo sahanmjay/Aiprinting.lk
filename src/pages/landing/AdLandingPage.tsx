@@ -23,7 +23,7 @@ export const AdLandingPage: React.FC<LandingProps> = ({ variant }) => {
   const config = {
     'visiting-cards': {
       title: 'Premium Visiting Cards Printing in Colombo & Island-Wide',
-      subline: '9 luxury imported paper boards. Gloss, matte, metallic gold & ribbed finishes. 100 to 5,000 cards dispatched in 24–48 hours.',
+      subline: '8 premium paper boards. Gloss, matte, metallic gold & ribbed finishes. 100 to 5,000 cards dispatched in 24–48 hours.',
       priceStarting: 'Rs. 1,000.00',
       heroImage: 'https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&w=1200&q=85',
       primaryLink: '/product/double-sided-visiting-cards',

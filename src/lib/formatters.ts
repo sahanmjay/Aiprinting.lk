@@ -67,3 +67,8 @@ export function formatFileSize(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
+
+/** Line price for cart/order items; items without a price show "Price to be confirmed". */
+export function formatItemPrice(item: { lineTotal: number; priceToConfirm?: boolean }): string {
+  return item.priceToConfirm ? 'Price to be confirmed' : formatLKR(item.lineTotal);
+}

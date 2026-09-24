@@ -202,6 +202,15 @@ CREATE TABLE IF NOT EXISTS public.admin_users (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 17. CUSTOMERS (website accounts — copied here automatically when someone registers)
+CREATE TABLE IF NOT EXISTS public.customers (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    full_name TEXT,
+    phone TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- ==============================================================================
 -- STORAGE BUCKETS CONFIGURATION (SQL helper)
 -- ==============================================================================
@@ -218,6 +227,32 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT 
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS bank_slip_name TEXT;
 ALTER TABLE public.quotations ADD COLUMN IF NOT EXISTS attachment_name TEXT;
 ALTER TABLE public.quotations ADD COLUMN IF NOT EXISTS quoted_at TIMESTAMP WITH TIME ZONE;
+-- Customer accounts: orders placed while signed in are linked to the Supabase Auth user
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS orders_user_id_idx ON public.orders(user_id);
+
+-- Every new sign-up is saved in public.customers (staff logins are not customers)
+CREATE OR REPLACE FUNCTION public.handle_new_customer()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+    IF COALESCE(NEW.email, '') NOT LIKE '%@admin.aiprintingsolutions.com' THEN
+        INSERT INTO public.customers (id, email, full_name, phone)
+        VALUES (NEW.id, COALESCE(NEW.email, ''), NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'phone')
+        ON CONFLICT (id) DO NOTHING;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_customer();
+
+-- Customers who registered before this table existed
+INSERT INTO public.customers (id, email, full_name, phone, created_at)
+SELECT id, COALESCE(email, ''), raw_user_meta_data->>'full_name', raw_user_meta_data->>'phone', created_at
+FROM auth.users
+WHERE COALESCE(email, '') NOT LIKE '%@admin.aiprintingsolutions.com'
+ON CONFLICT (id) DO NOTHING;
 
 -- ==============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES — this whole section is safe to re-run
@@ -238,6 +273,7 @@ ALTER TABLE public.testimonials ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.client_logos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.site_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 
 -- Admin check. SECURITY DEFINER so it can read admin_users regardless of that table's RLS.
 CREATE OR REPLACE FUNCTION public.is_admin()
@@ -295,7 +331,10 @@ CREATE POLICY "Public can view site settings" ON public.site_settings FOR SELECT
 
 -- 2. PUBLIC INSERT (checkout, quote form, contact form) — customers cannot set admin-only fields
 CREATE POLICY "Public can create orders" ON public.orders FOR INSERT
-    WITH CHECK (order_status = 'new' AND payment_status IN ('pending', 'verification_needed'));
+    WITH CHECK (order_status = 'new' AND payment_status IN ('pending', 'verification_needed')
+                AND (user_id IS NULL OR user_id = auth.uid()));
+-- Signed-in customers can see their own orders (My Account)
+CREATE POLICY "Customers can view own orders" ON public.orders FOR SELECT TO authenticated USING (user_id = auth.uid());
 CREATE POLICY "Public can create order items" ON public.order_items FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public can upload artwork file references" ON public.artwork_files FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public can submit quotations" ON public.quotations FOR INSERT
@@ -319,6 +358,8 @@ CREATE POLICY "Admin full access" ON public.testimonials FOR ALL TO authenticate
 CREATE POLICY "Admin full access" ON public.client_logos FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 CREATE POLICY "Admin full access" ON public.site_settings FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
 CREATE POLICY "Admins can see own admin row" ON public.admin_users FOR SELECT TO authenticated USING (id = auth.uid());
+CREATE POLICY "Admin full access" ON public.customers FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+CREATE POLICY "Customers can view own profile" ON public.customers FOR SELECT TO authenticated USING (id = auth.uid());
 
 -- ==============================================================================
 -- STORAGE POLICIES (customer uploads are write-only; only admins can read them)

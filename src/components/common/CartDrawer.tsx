@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { X, Trash2, ArrowRight, ShoppingBag, ShieldCheck, FileCheck } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
-import { formatLKR } from '../../lib/formatters';
+import { formatLKR, formatItemPrice } from '../../lib/formatters';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -75,7 +75,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
                         {item.product.name}
                       </h4>
                       <div className="text-xs text-[#D6342C] font-semibold mt-0.5">
-                        {formatLKR(item.lineTotal)}
+                        {formatItemPrice(item)}
                       </div>
                     </div>
                     <button

@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, MessageCircle, PackageCheck, Printer, ArrowRight, Download, Clock } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import { formatLKR, getWhatsAppUrl } from '../lib/formatters';
+import { formatLKR, formatItemPrice, getWhatsAppUrl } from '../lib/formatters';
 import confetti from 'canvas-confetti';
 
 export const OrderConfirmationPage: React.FC = () => {
@@ -179,7 +179,7 @@ export const OrderConfirmationPage: React.FC = () => {
               </div>
 
               <div className="text-right font-bold text-sm text-[#0F1B2D]">
-                {formatLKR(item.lineTotal)}
+                {formatItemPrice(item)}
               </div>
             </div>
           ))}

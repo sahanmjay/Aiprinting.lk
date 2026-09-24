@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Trash2, ArrowRight, ShoppingBag, ShieldCheck, FileCheck, Truck, ChevronLeft } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import { formatLKR } from '../lib/formatters';
+import { formatLKR, formatItemPrice } from '../lib/formatters';
 
 export const CartPage: React.FC = () => {
   const { cart, removeFromCart, cartSubtotal, cartTotal, siteSettings } = useStore();
@@ -81,7 +81,7 @@ export const CartPage: React.FC = () => {
 
                 <div className="text-right sm:self-start">
                   <div className="text-lg font-bold text-[#0F1B2D]">
-                    {formatLKR(item.lineTotal)}
+                    {formatItemPrice(item)}
                   </div>
                   <button
                     onClick={() => removeFromCart(item.id)}

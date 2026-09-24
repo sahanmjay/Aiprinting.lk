@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ShoppingBag, Menu, X, MessageCircle, Phone, ChevronDown, Layers } from 'lucide-react';
+import { ShoppingBag, Menu, X, MessageCircle, Phone, ChevronDown, Layers, User } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { RegistrationMark } from './RegistrationMark';
 import { getWhatsAppUrl } from '../../lib/formatters';
@@ -10,7 +10,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenCart }) => {
-  const { cartCount, siteSettings, categories } = useStore();
+  const { cartCount, siteSettings, categories, customer } = useStore();
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [categoriesDropdownOpen, setCategoriesDropdownOpen] = useState(false);
@@ -39,6 +39,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCart }) => {
     { label: 'About Us', path: '/about' },
     { label: 'FAQ', path: '/faq' },
     { label: 'Contact', path: '/contact' },
+    { label: 'My Account', path: '/account' },
   ];
 
   return (
@@ -189,6 +190,19 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCart }) => {
             <MessageCircle className="w-3.5 h-3.5 text-[#25D366]" />
             <span>WhatsApp Us</span>
           </a>
+
+          {/* Account (sign in / my orders) */}
+          <Link
+            to="/account"
+            className="relative p-2 text-[#0F1B2D] hover:text-[#D6342C] transition-colors rounded-full hover:bg-black/5"
+            aria-label={customer ? 'My Account' : 'Sign in or register'}
+            title={customer ? `Signed in as ${customer.name || customer.email}` : 'Sign in / Register'}
+          >
+            <User className="w-5 h-5" />
+            {customer && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 border border-[#FAF8F5]" />
+            )}
+          </Link>
 
           {/* Cart Icon & Button */}
           <Link
