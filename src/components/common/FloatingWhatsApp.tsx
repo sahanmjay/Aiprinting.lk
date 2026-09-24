@@ -1,17 +1,19 @@
 import React from 'react';
 import { MessageCircle } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
 import { getWhatsAppUrl } from '../../lib/formatters';
 
 export const FloatingWhatsApp: React.FC = () => {
   const { siteSettings } = useStore();
+  const onProductPage = useLocation().pathname.startsWith('/product/'); // has its own sticky bar on phones
   const url = getWhatsAppUrl(
     siteSettings.whatsapp,
     "Hi Ai Printing, I'd like to ask about your printing services and get a price estimate."
   );
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex items-center group">
+    <div className={`fixed bottom-6 right-6 z-50 flex items-center group ${onProductPage ? 'max-lg:hidden' : ''}`}>
       <a
         href={url}
         target="_blank"

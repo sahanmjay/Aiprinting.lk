@@ -145,3 +145,12 @@
 @media (prefers-reduced-motion: reduce) {
   .loading-letter { opacity: 1 !important; }
 }
+
+/* ---------- Phones ---------- */
+@media (max-width: 639px) {
+  /* iOS zooms into any field under 16px when tapped */
+  input, select, textarea { font-size: 16px !important; }
+  /* 10-11px labels are unreadable on a phone */
+  .text-\[10px\], .text-\[10\.5px\], .text-\[11px\] { font-size: 12px !important; }
+}
+html { -webkit-text-size-adjust: 100%; }

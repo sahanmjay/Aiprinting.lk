@@ -108,19 +108,19 @@ export const Footer: React.FC = () => {
             <h4 className="text-sm font-bold uppercase tracking-wider text-white border-b border-[#1E2E46] pb-2">
               Popular Print Lines
             </h4>
-            <ul className="grid grid-cols-1 gap-1.5 text-xs text-slate-300">
+            <ul className="grid grid-cols-2 sm:grid-cols-1 gap-x-4 gap-y-0 sm:gap-y-1.5 text-xs text-slate-300">
               {categories.slice(0, 6).map((cat) => (
                 <li key={cat.id}>
                   <Link
                     to={`/shop/${cat.slug}`}
-                    className="hover:text-[#D6342C] transition-colors flex items-center gap-1 group"
+                    className="hover:text-[#D6342C] transition-colors flex items-center gap-1 group py-2 sm:py-0"
                   >
                     <ArrowRight className="w-3 h-3 text-slate-500 group-hover:text-[#D6342C] transition-transform group-hover:translate-x-0.5" />
                     <span>{cat.name}</span>
                   </Link>
                 </li>
               ))}
-              <li className="pt-2 border-t border-[#1E2E46] flex gap-3 text-[11px] text-slate-400">
+              <li className="col-span-2 sm:col-span-1 mt-2 pt-2 border-t border-[#1E2E46] flex items-center gap-3 text-[11px] text-slate-400 [&>a]:py-2 sm:[&>a]:py-0">
                 <Link to="/quote" className="hover:text-white underline">Custom Quote</Link>
                 <span>·</span>
                 <Link to="/faq" className="hover:text-white underline">FAQ</Link>

@@ -211,8 +211,41 @@ export const ProductDetailPage: React.FC = () => {
     .slice(0, 3);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-12">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-12 max-lg:pb-28">
       {quotationDoc}
+
+      {/* Phones: price + Add to Cart always in reach */}
+      <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E6E0D6] px-4 py-3 flex items-center gap-3 shadow-[0_-4px_16px_rgba(15,27,45,0.08)]">
+        <div className="min-w-0 flex-1">
+          {addedToast ? (
+            <Link to="/cart" className="text-sm font-bold text-emerald-700 flex items-center gap-1">
+              <Check className="w-4 h-4" /> Added — view cart
+            </Link>
+          ) : (
+            <>
+              <div className="text-lg font-bold text-[#0F1B2D] leading-tight">{formatLKR(totalPrice)}</div>
+              <div className="text-xs text-slate-500 truncate">{selectedQty?.label ?? product.name}</div>
+            </>
+          )}
+        </div>
+        <a
+          href={getWhatsAppUrl(siteSettings.whatsapp, whatsappMessage)}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Order on WhatsApp"
+          className="shrink-0 w-12 h-12 rounded-full bg-[#25D366] text-white flex items-center justify-center"
+        >
+          <MessageCircle className="w-5 h-5" />
+        </a>
+        <button
+          onClick={handleAddToCart}
+          disabled={isUploading || totalPrice <= 0}
+          className="shrink-0 h-12 px-5 bg-[#D6342C] hover:bg-[#B8251E] text-white font-bold text-sm rounded-full flex items-center gap-2 disabled:opacity-60"
+        >
+          <ShoppingBag className="w-4 h-4" />
+          Add to Cart
+        </button>
+      </div>
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-xs text-slate-500">
         <Link to="/" className="hover:text-[#0F1B2D]">Home</Link>

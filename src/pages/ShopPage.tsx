@@ -70,20 +70,20 @@ export const ShopPage: React.FC = () => {
           </div>
 
           {/* Categories List */}
-          <div className="bg-white rounded border border-[#E6E0D6] p-4 space-y-3">
-            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#0F1B2D] border-b border-[#E6E0D6] pb-2">
+          <div className="lg:bg-white lg:rounded lg:border lg:border-[#E6E0D6] lg:p-4 space-y-3">
+            <div className="hidden lg:flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#0F1B2D] border-b border-[#E6E0D6] pb-2">
               <Filter className="w-3.5 h-3.5 text-[#D6342C]" />
               <span>Categories</span>
             </div>
 
-            <ul className="space-y-1 text-xs">
-              <li>
+            <ul className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 lg:mx-0 lg:px-0 lg:block lg:space-y-1 text-xs [scrollbar-width:none]">
+              <li className="shrink-0">
                 <Link
                   to="/shop"
-                  className={`block px-2.5 py-1.5 rounded transition-colors ${
+                  className={`block px-3 py-2 lg:px-2.5 lg:py-1.5 rounded-full lg:rounded border lg:border-0 border-[#E6E0D6] whitespace-nowrap transition-colors ${
                     !categorySlug
-                      ? 'bg-[#0F1B2D] text-white font-semibold'
-                      : 'text-slate-600 hover:bg-[#FAF8F5] hover:text-[#0F1B2D]'
+                      ? 'bg-[#0F1B2D] border-[#0F1B2D] text-white font-semibold'
+                      : 'bg-white lg:bg-transparent text-slate-600 hover:bg-[#FAF8F5] hover:text-[#0F1B2D]'
                   }`}
                 >
                   All Categories ({products.length})
@@ -94,13 +94,13 @@ export const ShopPage: React.FC = () => {
                 const count = products.filter((p) => p.categoryId === cat.id).length;
                 const isSelected = categorySlug === cat.slug;
                 return (
-                  <li key={cat.id}>
+                  <li key={cat.id} className="shrink-0">
                     <Link
                       to={`/shop/${cat.slug}`}
-                      className={`flex items-center justify-between px-2.5 py-1.5 rounded transition-colors ${
+                      className={`flex items-center justify-between gap-1.5 px-3 py-2 lg:px-2.5 lg:py-1.5 rounded-full lg:rounded border lg:border-0 border-[#E6E0D6] whitespace-nowrap transition-colors ${
                         isSelected
-                          ? 'bg-[#0F1B2D] text-white font-semibold'
-                          : 'text-slate-600 hover:bg-[#FAF8F5] hover:text-[#0F1B2D]'
+                          ? 'bg-[#0F1B2D] border-[#0F1B2D] text-white font-semibold'
+                          : 'bg-white lg:bg-transparent text-slate-600 hover:bg-[#FAF8F5] hover:text-[#0F1B2D]'
                       }`}
                     >
                       <span>{cat.name}</span>
