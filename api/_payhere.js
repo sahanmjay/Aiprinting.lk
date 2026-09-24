@@ -2,9 +2,12 @@
 import { createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 
-export const SANDBOX = process.env.PAYHERE_SANDBOX === 'true';
-export const MERCHANT_ID = process.env.PAYHERE_MERCHANT_ID;
-const MERCHANT_SECRET = process.env.PAYHERE_MERCHANT_SECRET;
+// Trimmed: a stray space/newline pasted into Vercel silently breaks the hash ("Unauthorized payment request").
+const env = (name) => (process.env[name] || '').trim();
+
+export const SANDBOX = env('PAYHERE_SANDBOX').toLowerCase() === 'true';
+export const MERCHANT_ID = env('PAYHERE_MERCHANT_ID');
+const MERCHANT_SECRET = env('PAYHERE_MERCHANT_SECRET');
 
 export const CHECKOUT_URL = SANDBOX
   ? 'https://sandbox.payhere.lk/pay/checkout'
@@ -26,12 +29,12 @@ export function notifySignature({ merchant_id, order_id, payhere_amount, payhere
 }
 
 export const isConfigured = () =>
-  Boolean(MERCHANT_ID && MERCHANT_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  Boolean(MERCHANT_ID && MERCHANT_SECRET && env('SUPABASE_SERVICE_ROLE_KEY'));
 
 // Service-role client: bypasses RLS, so it must only ever run on the server.
 export const adminDb = () =>
   createClient(
-    process.env.VITE_SUPABASE_URL || 'https://enrdcnhpvpcoiipkfaad.supabase.co',
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    env('VITE_SUPABASE_URL') || 'https://enrdcnhpvpcoiipkfaad.supabase.co',
+    env('SUPABASE_SERVICE_ROLE_KEY'),
     { auth: { persistSession: false } }
   );

@@ -217,6 +217,7 @@ ON CONFLICT (id) DO NOTHING;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS bank_slip_name TEXT;
 ALTER TABLE public.quotations ADD COLUMN IF NOT EXISTS attachment_name TEXT;
+ALTER TABLE public.quotations ADD COLUMN IF NOT EXISTS quoted_at TIMESTAMP WITH TIME ZONE;
 
 -- ==============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES — this whole section is safe to re-run
@@ -255,6 +256,22 @@ RETURNS SETOF public.orders LANGUAGE sql STABLE SECURITY DEFINER SET search_path
 $$;
 GRANT EXECUTE ON FUNCTION public.track_order(TEXT, TEXT) TO anon, authenticated;
 
+-- Customer quotation lookup (to download the priced quotation): quote number AND phone used on the request.
+-- Returns only customer-facing columns (never admin_notes).
+CREATE OR REPLACE FUNCTION public.track_quote(p_quote_number TEXT, p_phone TEXT)
+RETURNS TABLE (
+    quote_number TEXT, name TEXT, company TEXT, phone TEXT, email TEXT, product_type TEXT, quantity TEXT,
+    specifications TEXT, deadline DATE, status TEXT, quoted_amount NUMERIC, quoted_at TIMESTAMPTZ, created_at TIMESTAMPTZ
+) LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+    SELECT q.quote_number, q.name, q.company, q.phone, q.email, q.product_type, q.quantity,
+           q.specifications, q.deadline, q.status, q.quoted_amount, q.quoted_at, q.created_at
+    FROM public.quotations q
+    WHERE upper(q.quote_number) = upper(trim(p_quote_number))
+      AND length(regexp_replace(p_phone, '\D', '', 'g')) >= 9
+      AND right(regexp_replace(q.phone, '\D', '', 'g'), 9) = right(regexp_replace(p_phone, '\D', '', 'g'), 9);
+$$;
+GRANT EXECUTE ON FUNCTION public.track_quote(TEXT, TEXT) TO anon, authenticated;
+
 -- Drop every existing policy on public tables so this section re-runs cleanly
 DO $$
 DECLARE pol RECORD;
@@ -282,7 +299,7 @@ CREATE POLICY "Public can create orders" ON public.orders FOR INSERT
 CREATE POLICY "Public can create order items" ON public.order_items FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public can upload artwork file references" ON public.artwork_files FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public can submit quotations" ON public.quotations FOR INSERT
-    WITH CHECK (status = 'new' AND admin_notes IS NULL AND quoted_amount IS NULL);
+    WITH CHECK (status = 'new' AND admin_notes IS NULL AND quoted_amount IS NULL AND quoted_at IS NULL);
 CREATE POLICY "Public can send contact messages" ON public.contact_messages FOR INSERT WITH CHECK (is_read = false);
 
 -- 3. ADMIN FULL ACCESS

@@ -9,13 +9,43 @@ import {
   MessageCircle,
   FileCheck,
   X,
+  FileDown,
+  Search,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { uploadFile } from '../lib/supabase';
-import { getWhatsAppUrl } from '../lib/formatters';
+import { getWhatsAppUrl, formatLKR } from '../lib/formatters';
+import { useQuotationPrint, QuotationData } from '../components/common/QuotationDocument';
+import { Quotation } from '../types';
+
+// Staff price a quote in the admin panel; until then the PDF is a "quotation request" without amounts.
+const isPriced = (q: Quotation) => q.quotedAmount != null && (q.status === 'quoted' || q.status === 'won');
+
+const quoteToDocument = (q: Quotation): QuotationData => {
+  const details = [q.specifications];
+  if (q.deadline) details.push(`Required by: ${q.deadline}`);
+  return {
+    quoteNumber: q.quoteNumber,
+    date: new Date(isPriced(q) && q.quotedAt ? q.quotedAt : q.createdAt),
+    customerName: q.name,
+    company: q.company ?? '',
+    phone: q.phone,
+    lines: [
+      {
+        description: q.productType,
+        details,
+        quantity: q.quantity,
+        amount: isPriced(q) ? Number(q.quotedAmount) : undefined,
+      },
+    ],
+    notes: '',
+    deliveryFee: 0, // staff quote the full price including delivery
+  };
+};
 
 export const QuotePage: React.FC = () => {
-  const { createQuote, siteSettings, categories } = useStore();
+  const { createQuote, trackQuote, siteSettings, categories } = useStore();
+  const { printQuotation, quotationDoc } = useQuotationPrint(siteSettings);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -30,7 +60,27 @@ export const QuotePage: React.FC = () => {
   const [attachmentUrl, setAttachmentUrl] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submittedQuoteNumber, setSubmittedQuoteNumber] = useState<string | null>(null);
+  const [submittedQuote, setSubmittedQuote] = useState<Quotation | null>(null);
+
+  // "Download your quotation" lookup
+  const [lookupNumber, setLookupNumber] = useState('');
+  const [lookupPhone, setLookupPhone] = useState('');
+  const [lookupResult, setLookupResult] = useState<Quotation | 'not-found' | null>(null);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+
+  const handleLookup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lookupNumber.trim() || !lookupPhone.trim()) return;
+    setIsLookingUp(true);
+    try {
+      setLookupResult((await trackQuote(lookupNumber.trim(), lookupPhone.trim())) ?? 'not-found');
+    } catch (err) {
+      console.error('Quote lookup failed:', err);
+      alert('Could not look up the quotation right now. Please try again, or contact us on WhatsApp.');
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -70,7 +120,7 @@ export const QuotePage: React.FC = () => {
         attachmentUrl,
       });
 
-      setSubmittedQuoteNumber(quote.quoteNumber);
+      setSubmittedQuote(quote);
     } catch (err) {
       console.error('Failed to submit quote:', err);
       alert('Sorry, we could not send your quote request. Please try again, or contact us on WhatsApp.');
@@ -79,9 +129,11 @@ export const QuotePage: React.FC = () => {
     }
   };
 
-  if (submittedQuoteNumber) {
+  if (submittedQuote) {
+    const submittedQuoteNumber = submittedQuote.quoteNumber;
     return (
       <div className="max-w-3xl mx-auto px-4 py-16 text-center space-y-6">
+        {quotationDoc}
         <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
           <CheckCircle2 className="w-8 h-8" />
         </div>
@@ -92,11 +144,19 @@ export const QuotePage: React.FC = () => {
           </div>
           <h1 className="text-3xl font-bold text-[#0F1B2D]">Quote #{submittedQuoteNumber}</h1>
           <p className="text-xs sm:text-sm text-slate-600 max-w-lg mx-auto leading-relaxed">
-            Thank you, {name}! Our commercial estimating team has received your job specifications. We will review your materials and respond within <strong>one working day</strong> with an official written quote and prepress timeline.
+            Thank you, {name}! Our commercial estimating team has received your job specifications. We will review your materials and price them within <strong>one working day</strong>. Once priced, download your official quotation from this page using quote number <strong>{submittedQuoteNumber}</strong> and your phone number.
           </p>
         </div>
 
         <div className="pt-4 flex flex-col sm:flex-row justify-center gap-3">
+          <button
+            onClick={() => printQuotation(quoteToDocument(submittedQuote))}
+            className="px-6 py-3 bg-[#0F1B2D] hover:bg-[#182A45] text-white font-bold text-xs rounded flex items-center justify-center gap-2 shadow-sm transition-colors"
+          >
+            <FileDown className="w-4 h-4" />
+            <span>Download Quotation Request (PDF)</span>
+          </button>
+
           <a
             href={getWhatsAppUrl(
               siteSettings.whatsapp,
@@ -112,7 +172,7 @@ export const QuotePage: React.FC = () => {
 
           <button
             onClick={() => {
-              setSubmittedQuoteNumber(null);
+              setSubmittedQuote(null);
               setSpecifications('');
               setQuantity('');
               setAttachmentName('');
@@ -128,6 +188,7 @@ export const QuotePage: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16 space-y-10">
+      {quotationDoc}
       {/* Header */}
       <div className="bg-white rounded-lg border border-[#E6E0D6] p-6 sm:p-10 space-y-3 relative overflow-hidden">
         <div className="text-xs font-bold uppercase tracking-widest text-[#D6342C]">
@@ -331,6 +392,81 @@ export const QuotePage: React.FC = () => {
 
         {/* Sidebar Info */}
         <div className="lg:col-span-4 space-y-4">
+          {/* Download a quotation the team has priced */}
+          <form
+            onSubmit={handleLookup}
+            className="bg-white p-6 rounded-lg border border-[#E6E0D6] shadow-xs space-y-3 text-xs"
+          >
+            <h3 className="font-bold text-sm text-[#0F1B2D] uppercase tracking-wider border-b border-[#E6E0D6] pb-2">
+              Download Your Quotation
+            </h3>
+            <p className="text-slate-600 leading-relaxed">
+              Already sent a request? Enter your quote number and phone to download your quotation PDF.
+            </p>
+            <input
+              aria-label="Quote number"
+              placeholder="e.g. QT-2026-660961"
+              value={lookupNumber}
+              onChange={(e) => {
+                setLookupNumber(e.target.value);
+                setLookupResult(null);
+              }}
+              className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden font-mono uppercase"
+            />
+            <input
+              aria-label="Phone number used on the request"
+              type="tel"
+              placeholder="Phone number used on the request"
+              value={lookupPhone}
+              onChange={(e) => {
+                setLookupPhone(e.target.value);
+                setLookupResult(null);
+              }}
+              className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden"
+            />
+            <button
+              type="submit"
+              disabled={isLookingUp}
+              className="w-full py-2.5 bg-[#0F1B2D] hover:bg-[#182A45] text-white font-bold rounded flex items-center justify-center gap-2 transition-colors disabled:opacity-60"
+            >
+              <Search className="w-4 h-4" />
+              <span>{isLookingUp ? 'Searching…' : 'Find My Quotation'}</span>
+            </button>
+
+            {lookupResult === 'not-found' && (
+              <p role="status" className="text-red-600">
+                No quotation found for that number and phone. Please check both and try again.
+              </p>
+            )}
+            {lookupResult && lookupResult !== 'not-found' && (
+              <div role="status" className="p-3 rounded border border-[#E6E0D6] bg-[#FAF8F5] space-y-2">
+                {lookupResult.status === 'lost' ? (
+                  <p className="text-slate-700">
+                    Quotation <strong>{lookupResult.quoteNumber}</strong> is closed. Please send a new request or WhatsApp us.
+                  </p>
+                ) : isPriced(lookupResult) ? (
+                  <p className="text-emerald-800">
+                    Your quotation is ready: <strong>{formatLKR(Number(lookupResult.quotedAmount))}</strong>
+                  </p>
+                ) : (
+                  <p className="text-amber-800">
+                    Our team is still pricing <strong>{lookupResult.quoteNumber}</strong>. You can download your request summary now.
+                  </p>
+                )}
+                {lookupResult.status !== 'lost' && (
+                  <button
+                    type="button"
+                    onClick={() => printQuotation(quoteToDocument(lookupResult))}
+                    className="w-full py-2.5 bg-[#D6342C] hover:bg-[#B8251E] text-white font-bold rounded flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <FileDown className="w-4 h-4" />
+                    <span>{isPriced(lookupResult) ? 'Download Quotation (PDF)' : 'Download Request (PDF)'}</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </form>
+
           <div className="bg-white p-6 rounded-lg border border-[#E6E0D6] shadow-xs space-y-4 text-xs">
             <h3 className="font-bold text-sm text-[#0F1B2D] uppercase tracking-wider border-b border-[#E6E0D6] pb-2">
               Need It Faster?

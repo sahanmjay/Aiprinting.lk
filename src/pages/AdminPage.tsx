@@ -28,7 +28,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import { formatLKR } from '../lib/formatters';
+import { formatLKR, getWhatsAppUrl } from '../lib/formatters';
 import { openStoredFile } from '../lib/supabase';
 import {
   VISITING_CARD_PAPERS,
@@ -1538,6 +1538,7 @@ export const AdminPage: React.FC = () => {
                   <th className="p-3">Client</th>
                   <th className="p-3">Product & Qty</th>
                   <th className="p-3">Specifications</th>
+                  <th className="p-3">Price (LKR, incl. delivery)</th>
                   <th className="p-3">Status</th>
                 </tr>
               </thead>
@@ -1566,6 +1567,40 @@ export const AdminPage: React.FC = () => {
                           <ExternalLink className="w-3 h-3" />
                           {q.attachmentName || 'Attachment'}
                         </button>
+                      )}
+                    </td>
+                    <td className="p-3 space-y-1">
+                      {/* Saving a price marks the quote "quoted"; the customer can then download it at /quote */}
+                      <input
+                        key={q.quotedAmount ?? 'unpriced'}
+                        type="number"
+                        min="0"
+                        step="any"
+                        defaultValue={q.quotedAmount ?? ''}
+                        placeholder="Enter price"
+                        aria-label={`Price for ${q.quoteNumber}`}
+                        onBlur={(e) => {
+                          if (e.target.value === '') return;
+                          const price = Number(e.target.value);
+                          if (price === q.quotedAmount || price < 0) return;
+                          updateQuoteStatus(q.id, q.status === 'new' ? 'quoted' : q.status, undefined, price);
+                        }}
+                        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                        className="w-28 p-1 text-[11px] rounded border border-slate-300 bg-white"
+                      />
+                      {q.quotedAmount != null && (
+                        <a
+                          href={getWhatsAppUrl(
+                            q.phone,
+                            `Hi ${q.name}, your quotation ${q.quoteNumber} from Ai Printing Solutions is ready: ${formatLKR(q.quotedAmount)}.\n\nDownload the official quotation (PDF) at ${window.location.origin}/quote using your quotation number and phone number.`
+                          )}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-[11px] text-[#128C7E] font-semibold hover:underline"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          Send to customer
+                        </a>
                       )}
                     </td>
                     <td className="p-3">

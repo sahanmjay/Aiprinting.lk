@@ -53,7 +53,7 @@ export function isValidSriLankanPhone(phone: string): boolean {
  * Generates direct WhatsApp chat URL with pre-filled message
  */
 export function getWhatsAppUrl(phone: string, message: string): string {
-  const cleanPhone = phone.replace(/[^0-9]/g, '');
+  const cleanPhone = phone.replace(/[^0-9]/g, '').replace(/^0/, '94'); // 0771234567 -> 94771234567
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
 }
 

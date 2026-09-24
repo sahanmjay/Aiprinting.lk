@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { flushSync } from 'react-dom';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ShieldCheck,
@@ -22,7 +21,7 @@ import { uploadFile } from '../lib/supabase';
 import { formatLKR, getWhatsAppUrl, formatFileSize, generateQuoteNumber } from '../lib/formatters';
 import { UploadedArtwork, CartItem, Product } from '../types';
 import { RegistrationMark } from '../components/common/RegistrationMark';
-import { QuotationDocument, QuotationData, QuotationLine } from '../components/common/QuotationDocument';
+import { useQuotationPrint, QuotationData, QuotationLine } from '../components/common/QuotationDocument';
 
 export const ProductDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -64,7 +63,7 @@ export const ProductDetailPage: React.FC = () => {
   const [quoteName, setQuoteName] = useState('');
   const [quoteCompany, setQuoteCompany] = useState('');
   const [quotePhone, setQuotePhone] = useState('');
-  const [quoteData, setQuoteData] = useState<QuotationData | null>(null);
+  const { printQuotation, quotationDoc } = useQuotationPrint(siteSettings);
 
   // Price Calculation
   const selectedPaper = paperGroup?.values.find((v) => v.id === selectedPaperId);
@@ -163,7 +162,6 @@ export const ProductDetailPage: React.FC = () => {
     setTimeout(() => setAddedToast(false), 3000);
   };
 
-  // Renders the quotation into the print-only document, then opens the print dialog ("Save as PDF").
   const handleDownloadQuote = () => {
     const details: string[] = [];
     if (paperGroup && selectedPaper) details.push(`${paperGroup.name}: ${selectedPaper.label}`);
@@ -190,21 +188,9 @@ export const ProductDetailPage: React.FC = () => {
       phone: quotePhone.trim(),
       lines,
       notes: specialInstructions.trim(),
+      deliveryFee: siteSettings.deliveryFee,
     };
-    flushSync(() => setQuoteData(data)); // document must be in the DOM before print() snapshots it
-
-    const prevTitle = document.title;
-    document.title = `Quotation ${data.quoteNumber} - ${siteSettings.siteName}`; // default PDF file name
-    document.body.classList.add('printing-quote');
-    window.addEventListener(
-      'afterprint',
-      () => {
-        document.body.classList.remove('printing-quote');
-        document.title = prevTitle;
-      },
-      { once: true }
-    );
-    window.print();
+    printQuotation(data);
   };
 
   // Build WhatsApp pre-filled configuration message
@@ -226,7 +212,7 @@ export const ProductDetailPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-12">
-      {quoteData && <QuotationDocument data={quoteData} settings={siteSettings} />}
+      {quotationDoc}
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-xs text-slate-500">
         <Link to="/" className="hover:text-[#0F1B2D]">Home</Link>

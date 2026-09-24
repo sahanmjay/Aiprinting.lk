@@ -155,6 +155,7 @@ export interface Quotation {
   status: QuoteStatus;
   adminNotes?: string;
   quotedAmount?: number;
+  quotedAt?: string; // when staff priced it; the quotation is valid from this date
   createdAt: string;
 }
 

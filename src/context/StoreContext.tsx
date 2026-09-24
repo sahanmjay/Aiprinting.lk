@@ -49,6 +49,7 @@ interface StoreContextType {
   // Quotes
   createQuote: (quoteData: Omit<Quotation, 'id' | 'quoteNumber' | 'status' | 'createdAt'>) => Promise<Quotation>;
   updateQuoteStatus: (quoteId: string, status: QuoteStatus, adminNotes?: string, quotedAmount?: number) => Promise<void>;
+  trackQuote: (quoteNumber: string, phone: string) => Promise<Quotation | null>;
 
   // Contact
   sendContactMessage: (msg: Omit<ContactMessage, 'id' | 'isRead' | 'createdAt'>) => Promise<void>;
@@ -260,7 +261,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const changes = {
       status,
       ...(adminNotes !== undefined ? { adminNotes } : {}),
-      ...(quotedAmount !== undefined ? { quotedAmount } : {}),
+      ...(quotedAmount !== undefined ? { quotedAmount, quotedAt: new Date().toISOString() } : {}),
     };
     const { error } = await supabase.from('quotations').update(toRow(changes)).eq('id', quoteId);
     if (error) {
@@ -268,6 +269,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return;
     }
     setQuotations((prev) => prev.map((q) => (q.id === quoteId ? { ...q, ...changes } : q)));
+  };
+
+  // Customer quote lookup: needs the quote number AND the phone used on the request
+  const trackQuote = async (quoteNumber: string, phone: string): Promise<Quotation | null> => {
+    const { data, error } = await supabase.rpc('track_quote', {
+      p_quote_number: quoteNumber,
+      p_phone: phone,
+    });
+    if (error) throw error;
+    return data?.[0] ? fromRow<Quotation>(data[0]) : null;
   };
 
   // Contact
@@ -462,6 +473,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         trackOrder,
         createQuote,
         updateQuoteStatus,
+        trackQuote,
         sendContactMessage,
         markMessageRead,
         getPriceForOptions,
