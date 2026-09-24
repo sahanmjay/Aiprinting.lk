@@ -19,6 +19,7 @@ import { formatLKR } from '../lib/formatters';
 import { RegistrationMark } from '../components/common/RegistrationMark';
 import { SEED_TESTIMONIALS, SEED_CLIENT_LOGOS } from '../data/seedData';
 import { getWhatsAppUrl } from '../lib/formatters';
+import { FlowButton } from '../components/ui/flow-button';
 
 export const HomePage: React.FC = () => {
   const { categories, products, siteSettings } = useStore();
@@ -53,20 +54,8 @@ export const HomePage: React.FC = () => {
 
               {/* CTAs */}
               <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                <Link
-                  to="/product/double-sided-visiting-cards"
-                  className="px-6 py-3.5 bg-[#D6342C] hover:bg-[#B8251E] text-white font-bold text-sm rounded shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 group"
-                >
-                  <span>Order Visiting Cards</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </Link>
-
-                <Link
-                  to="/quote"
-                  className="px-6 py-3.5 bg-[#182A45] hover:bg-[#203657] text-[#FAF8F5] font-semibold text-sm rounded border border-[#2D456B] transition-colors flex items-center justify-center gap-2"
-                >
-                  <span>Request Custom Quote</span>
-                </Link>
+                <FlowButton to="/product/double-sided-visiting-cards" text="Order Visiting Cards" variant="accent" className="py-3.5 shadow-md" />
+                <FlowButton to="/quote" text="Request Custom Quote" variant="light" className="py-3.5" />
 
                 <a
                   href={getWhatsAppUrl(siteSettings.whatsapp, "Hi Ai Printing, I'd like a quick quote.")}
@@ -466,12 +455,7 @@ export const HomePage: React.FC = () => {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 relative z-10 w-full lg:w-auto">
-            <Link
-              to="/quote"
-              className="px-6 py-3.5 bg-[#D6342C] hover:bg-[#B8251E] text-white font-bold text-xs rounded transition-colors text-center shadow-md"
-            >
-              Request a Custom Quote
-            </Link>
+            <FlowButton to="/quote" text="Request a Custom Quote" variant="accent" className="py-3.5 shadow-md" />
             <a
               href={getWhatsAppUrl(siteSettings.whatsapp, "Hi Ai Printing, I'd like to ask about a bulk print order.")}
               target="_blank"

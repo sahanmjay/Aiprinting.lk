@@ -121,3 +121,27 @@
   body.printing-quote { background: #fff !important; }
   .quotation-doc { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+
+/* AI PRINTING loader (src/components/ui/loading-lines.tsx) */
+@keyframes loadLetter {
+  0% { opacity: 0; }
+  5% { opacity: 1; transform: scale(1.1) translateY(-2px); }
+  20% { opacity: 0.2; }
+  100% { opacity: 0; }
+}
+@keyframes loadSweep {
+  0% { transform: translateX(-55%); }
+  100% { transform: translateX(55%); }
+}
+@keyframes loadFade {
+  0%, 100% { opacity: 0; }
+  15% { opacity: 1; }
+  65% { opacity: 0; }
+}
+.loading-letter { opacity: 0; animation: loadLetter 4s linear infinite; }
+.loading-glow { animation: loadSweep 2s infinite alternate cubic-bezier(0.6, 0.8, 0.5, 1), loadFade 4s infinite; }
+
+/* Reduced motion turns animations off, so show the word instead of invisible letters */
+@media (prefers-reduced-motion: reduce) {
+  .loading-letter { opacity: 1 !important; }
+}

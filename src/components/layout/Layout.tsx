@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { TopBar } from '../common/TopBar';
 import { Header } from '../common/Header';
 import { Footer } from '../common/Footer';
 import { FloatingWhatsApp } from '../common/FloatingWhatsApp';
 import { CartDrawer } from '../common/CartDrawer';
+import LoadingLines from '../ui/loading-lines';
 
 export const Layout: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -22,7 +23,9 @@ export const Layout: React.FC = () => {
       
       <main className="flex-grow">
         <div key={pathname} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <Outlet />
+          <Suspense fallback={<LoadingLines />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
 

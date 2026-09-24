@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+        "createdAt": "2026-09-24T14:51:40.058Z",
+        "reason": "user-supplied FlowButton component (pasted spec): the overshooting arrow slide is part of its signature motion"
+      }
+    ]
+  }
+}

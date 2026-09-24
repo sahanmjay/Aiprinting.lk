@@ -1,30 +1,36 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { StoreProvider } from './context/StoreContext';
 import { Layout } from './components/layout/Layout';
 import { StructuredData } from './components/seo/StructuredData';
 
-// Pages
+import LoadingLines from './components/ui/loading-lines';
+
+// Pages: the homepage ships in the main bundle; every other page is downloaded when first
+// visited, with the AI PRINTING loader showing meanwhile (keeps the first load small).
 import { HomePage } from './pages/HomePage';
-import { ShopPage } from './pages/ShopPage';
-import { ProductDetailPage } from './pages/ProductDetailPage';
-import { CartPage } from './pages/CartPage';
-import { CheckoutPage } from './pages/CheckoutPage';
-import { OrderConfirmationPage } from './pages/OrderConfirmationPage';
-import { QuotePage } from './pages/QuotePage';
-import { AboutPage } from './pages/AboutPage';
-import { FAQPage } from './pages/FAQPage';
-import { ContactPage } from './pages/ContactPage';
-import { AccountPage } from './pages/AccountPage';
-import { AdminPage } from './pages/AdminPage';
-import { AdLandingPage } from './pages/landing/AdLandingPage';
-import { MerchantFeedPage } from './pages/MerchantFeedPage';
+const ShopPage = lazy(() => import('./pages/ShopPage').then((m) => ({ default: m.ShopPage })));
+const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage').then((m) => ({ default: m.ProductDetailPage })));
+const CartPage = lazy(() => import('./pages/CartPage').then((m) => ({ default: m.CartPage })));
+const CheckoutPage = lazy(() => import('./pages/CheckoutPage').then((m) => ({ default: m.CheckoutPage })));
+const OrderConfirmationPage = lazy(() =>
+  import('./pages/OrderConfirmationPage').then((m) => ({ default: m.OrderConfirmationPage }))
+);
+const QuotePage = lazy(() => import('./pages/QuotePage').then((m) => ({ default: m.QuotePage })));
+const AboutPage = lazy(() => import('./pages/AboutPage').then((m) => ({ default: m.AboutPage })));
+const FAQPage = lazy(() => import('./pages/FAQPage').then((m) => ({ default: m.FAQPage })));
+const ContactPage = lazy(() => import('./pages/ContactPage').then((m) => ({ default: m.ContactPage })));
+const AccountPage = lazy(() => import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })));
+const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
+const AdLandingPage = lazy(() => import('./pages/landing/AdLandingPage').then((m) => ({ default: m.AdLandingPage })));
+const MerchantFeedPage = lazy(() => import('./pages/MerchantFeedPage').then((m) => ({ default: m.MerchantFeedPage })));
 
 export function App() {
   return (
     <StoreProvider>
       <BrowserRouter>
         <StructuredData />
+        <Suspense fallback={<LoadingLines fullScreen />}>
         <Routes>
           {/* Main Storefront Layout Routes */}
           <Route path="/" element={<Layout />}>
@@ -64,6 +70,7 @@ export function App() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </StoreProvider>
   );
