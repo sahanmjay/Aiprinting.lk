@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, MessageCircle, PackageCheck, Printer, ArrowRight, Download, Clock } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatLKR, getWhatsAppUrl } from '../lib/formatters';
@@ -10,6 +10,8 @@ export const OrderConfirmationPage: React.FC = () => {
   const { getOrderById, siteSettings } = useStore();
 
   const order = getOrderById(id || '');
+  // Set by the PayHere return_url / cancel_url
+  const payment = useSearchParams()[0].get('payment');
 
   useEffect(() => {
     // Fire celebratory confetti on load
@@ -46,6 +48,17 @@ export const OrderConfirmationPage: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-16 space-y-8">
+      {payment === 'return' && (
+        <div className="p-4 bg-emerald-50 border border-emerald-300 text-emerald-900 text-sm rounded">
+          <strong>Payment submitted.</strong> PayHere is confirming it with us — your order will show as paid shortly.
+        </div>
+      )}
+      {payment === 'cancelled' && (
+        <div className="p-4 bg-amber-50 border border-amber-300 text-amber-900 text-sm rounded">
+          <strong>Online payment was cancelled.</strong> Your order is saved — you can pay by bank transfer, or WhatsApp us and we will help.
+        </div>
+      )}
+
       {/* Top Success Banner */}
       <div className="bg-white rounded-lg border-2 border-emerald-500/40 p-8 text-center space-y-4 shadow-sm relative overflow-hidden">
         <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-xs">

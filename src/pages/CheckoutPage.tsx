@@ -88,6 +88,34 @@ export const CheckoutPage: React.FC = () => {
     return Object.keys(errs).length === 0;
   };
 
+  // The server signs the payment (merchant secret never reaches the browser), then we POST to PayHere.
+  const redirectToPayHere = async (orderId: string) => {
+    const res = await fetch('/api/payhere-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId }),
+    });
+    if (!res.ok) {
+      // The order is saved; send the customer to it so they can pay another way.
+      alert('Your order was saved, but online payment could not be started. We will contact you, or you can pay by bank transfer.');
+      navigate(`/order-confirmation/${orderId}`);
+      return;
+    }
+    const { action, fields } = (await res.json()) as { action: string; fields: Record<string, string> };
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = action;
+    for (const [name, value] of Object.entries(fields)) {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
+    }
+    document.body.appendChild(form);
+    form.submit();
+  };
+
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) {
@@ -121,6 +149,10 @@ export const CheckoutPage: React.FC = () => {
         items: cart,
       });
 
+      if (paymentMethod === 'payhere') {
+        await redirectToPayHere(order.id);
+        return; // browser is leaving for PayHere
+      }
       navigate(`/order-confirmation/${order.id}`);
     } catch (err) {
       console.error('Failed to submit order:', err);
