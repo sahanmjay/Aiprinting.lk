@@ -26,6 +26,7 @@ import {
   ExternalLink,
   Mail,
   RefreshCw,
+  MessageCircle,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatLKR, getWhatsAppUrl } from '../lib/formatters';
@@ -35,6 +36,24 @@ import {
   VISITING_CARD_QUANTITIES,
 } from '../data/seedData';
 import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product } from '../types';
+
+// "delivered" is the completed state (kept as the DB value; shown to staff as Completed)
+const ORDER_STATUS: Record<OrderStatus, { label: string; badge: string }> = {
+  new: { label: 'New', badge: 'bg-blue-100 text-blue-800 border-blue-200' },
+  confirmed: { label: 'Confirmed', badge: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
+  in_production: { label: 'In Production', badge: 'bg-amber-100 text-amber-800 border-amber-200' },
+  ready: { label: 'Ready to Dispatch', badge: 'bg-purple-100 text-purple-800 border-purple-200' },
+  delivered: { label: 'Completed', badge: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+  cancelled: { label: 'Cancelled', badge: 'bg-red-100 text-red-800 border-red-200' },
+};
+const PAYMENT_STATUS: Record<PaymentStatus, { label: string; badge: string }> = {
+  pending: { label: 'Unpaid', badge: 'bg-slate-100 text-slate-700' },
+  verification_needed: { label: 'Check slip', badge: 'bg-amber-100 text-amber-800' },
+  paid: { label: 'Paid', badge: 'bg-emerald-100 text-emerald-800' },
+  failed: { label: 'Failed', badge: 'bg-red-100 text-red-800' },
+};
+const ACTIVE_STATUSES: OrderStatus[] = ['new', 'confirmed', 'in_production', 'ready'];
+const DAY_MS = 86400000;
 
 export const AdminPage: React.FC = () => {
   const {
@@ -52,6 +71,7 @@ export const AdminPage: React.FC = () => {
     contactMessages,
     markMessageRead,
     refreshAdminData,
+    savePriceMatrix,
     updatePriceCell,
     bulkAdjustGridPrices,
     exportGridCSV,
@@ -79,12 +99,17 @@ export const AdminPage: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
   const [orderSearch, setOrderSearch] = useState<string>('');
+  const [orderPaymentFilter, setOrderPaymentFilter] = useState<'all' | 'unpaid' | PaymentStatus>('all');
+  const [orderDateFilter, setOrderDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('all');
 
   // Price Grid Editor State
   const [selectedGridProduct, setSelectedGridProduct] = useState<'prod-vc-double' | 'prod-vc-single'>(
     'prod-vc-double'
   );
-  const [bulkPercentInput, setBulkPercentInput] = useState<number>(8); // Default 8% increase tool
+  const [gridPaperId, setGridPaperId] = useState<string>(VISITING_CARD_PAPERS[0].id);
+  const [pricesDirty, setPricesDirty] = useState(false);
+  const [isSavingPrices, setIsSavingPrices] = useState(false);
+  const [bulkPercentInput, setBulkPercentInput] = useState<number>(5);
   const [gridSaveToast, setGridSaveToast] = useState<boolean>(false);
   const [csvUploadText, setCsvUploadText] = useState<string>('');
   const [showCsvModal, setShowCsvModal] = useState<boolean>(false);
@@ -353,15 +378,84 @@ export const AdminPage: React.FC = () => {
   }
 
   // Filter orders
+  const searchText = orderSearch.trim().toLowerCase();
+  const searchDigits = searchText.replace(/\D/g, '');
+  const since = {
+    all: 0,
+    today: new Date().setHours(0, 0, 0, 0),
+    '7d': Date.now() - 7 * DAY_MS,
+    '30d': Date.now() - 30 * DAY_MS,
+  }[orderDateFilter];
+
   const filteredOrders = orders.filter((o) => {
-    const matchStatus = orderStatusFilter === 'all' || o.orderStatus === orderStatusFilter;
+    const matchStatus =
+      orderStatusFilter === 'all' ||
+      (orderStatusFilter === 'active' ? ACTIVE_STATUSES.includes(o.orderStatus) : o.orderStatus === orderStatusFilter);
+    const matchPayment =
+      orderPaymentFilter === 'all' ||
+      (orderPaymentFilter === 'unpaid' ? o.paymentStatus !== 'paid' : o.paymentStatus === orderPaymentFilter);
+    const matchDate = new Date(o.createdAt).getTime() >= since;
     const matchSearch =
-      !orderSearch.trim() ||
-      o.orderNumber.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      o.customerName.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      o.customerPhone.includes(orderSearch);
-    return matchStatus && matchSearch;
+      !searchText ||
+      [o.orderNumber, o.customerName, o.customerEmail, o.city, o.district, ...o.items.map((i) => i.product.name)].some(
+        (v) => v?.toLowerCase().includes(searchText)
+      ) ||
+      (searchDigits.length >= 3 && o.customerPhone.replace(/\D/g, '').includes(searchDigits));
+    return matchStatus && matchPayment && matchDate && matchSearch;
   });
+  const filteredTotal = filteredOrders.reduce((sum, o) => sum + o.total, 0);
+  const statusCount = (status: string) =>
+    status === 'all'
+      ? orders.length
+      : status === 'active'
+        ? orders.filter((o) => ACTIVE_STATUSES.includes(o.orderStatus)).length
+        : orders.filter((o) => o.orderStatus === status).length;
+
+  // One click to finish an order; offers to record the payment at the same time.
+  const completeOrder = async (o: Order) => {
+    const markPaid =
+      o.paymentStatus !== 'paid' &&
+      window.confirm(
+        `Completing ${o.orderNumber}.\n\nHas the customer paid ${formatLKR(o.total)}?\nOK = also mark as PAID\nCancel = complete without changing payment`
+      );
+    const changes = { orderStatus: 'delivered' as OrderStatus, ...(markPaid ? { paymentStatus: 'paid' as PaymentStatus } : {}) };
+    await updateOrder(o.id, changes);
+    if (selectedOrder?.id === o.id) setSelectedOrder({ ...o, ...changes });
+  };
+
+  const orderWhatsAppUrl = (o: Order) =>
+    getWhatsAppUrl(
+      o.customerPhone,
+      `Hi ${o.customerName}, this is Ai Printing Solutions about your order ${o.orderNumber} (${formatLKR(o.total)}). Current status: ${ORDER_STATUS[o.orderStatus].label}.`
+    );
+
+  const exportOrdersCSV = () => {
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const rows = [
+      ['Order #', 'Date', 'Customer', 'Phone', 'Email', 'City', 'District', 'Items', 'Payment Method', 'Payment Status', 'Order Status', 'Total (LKR)'],
+      ...filteredOrders.map((o) => [
+        o.orderNumber,
+        new Date(o.createdAt).toLocaleDateString('en-GB'),
+        o.customerName,
+        o.customerPhone,
+        o.customerEmail,
+        o.city,
+        o.district,
+        o.items.map((i) => i.product.name).join('; '),
+        o.paymentMethod.replace('_', ' '),
+        PAYMENT_STATUS[o.paymentStatus].label,
+        ORDER_STATUS[o.orderStatus].label,
+        o.total,
+      ]),
+    ];
+    const blob = new Blob([rows.map((row) => row.map(esc).join(',')).join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   // Calculation for dashboard stats
   const totalRevenue = orders
@@ -370,13 +464,42 @@ export const AdminPage: React.FC = () => {
   const pendingOrdersCount = orders.filter((o) => ['new', 'confirmed'].includes(o.orderStatus)).length;
   const pendingQuotesCount = quotations.filter((q) => q.status === 'new').length;
 
-  const handleBulkPercent = () => {
-    if (isNaN(bulkPercentInput)) return;
-    if (confirm(`Are you sure you want to apply a ${bulkPercentInput}% price adjustment across all 126 cells of this grid?`)) {
+  const gridPrice = (paperId: string, qtyId: string) =>
+    priceMatrix[selectedGridProduct]?.find((c) => c.optionValueA === paperId && c.optionValueB === qtyId)?.price ?? 0;
+
+  const setGridPrice = (paperId: string, qtyId: string, price: number) => {
+    updatePriceCell(selectedGridProduct, paperId, qtyId, price);
+    setPricesDirty(true);
+  };
+
+  // Raise (or lower, with a negative number) prices by a percentage, rounded to the nearest Rs. 50
+  const applyPercent = (scope: 'paper' | 'all') => {
+    if (!bulkPercentInput) return;
+    const direction = bulkPercentInput > 0 ? 'Increase' : 'Decrease';
+    const target = scope === 'all' ? 'ALL papers' : 'this paper';
+    if (!confirm(`${direction} prices of ${target} by ${Math.abs(bulkPercentInput)}%?\nPrices are rounded to the nearest Rs. 50.`)) return;
+    if (scope === 'all') {
       bulkAdjustGridPrices(selectedGridProduct, bulkPercentInput);
-      setGridSaveToast(true);
-      setTimeout(() => setGridSaveToast(false), 3000);
+    } else {
+      for (const qty of VISITING_CARD_QUANTITIES) {
+        const price = gridPrice(gridPaperId, qty.id);
+        updatePriceCell(selectedGridProduct, gridPaperId, qty.id, Math.round((price * (1 + bulkPercentInput / 100)) / 50) * 50);
+      }
     }
+    setPricesDirty(true);
+  };
+
+  const handleSavePrices = async () => {
+    setIsSavingPrices(true);
+    const error = await savePriceMatrix();
+    setIsSavingPrices(false);
+    if (error) {
+      alert(`Could not save prices: ${error}`);
+      return;
+    }
+    setPricesDirty(false);
+    setGridSaveToast(true);
+    setTimeout(() => setGridSaveToast(false), 3000);
   };
 
   const handleExportCSV = () => {
@@ -395,7 +518,8 @@ export const AdminPage: React.FC = () => {
     if (!csvUploadText.trim()) return;
     const success = importGridCSV(selectedGridProduct, csvUploadText);
     if (success) {
-      alert('CSV successfully imported into price matrix!');
+      setPricesDirty(true);
+      alert('CSV imported. Press "Save Prices" to publish the new prices.');
       setShowCsvModal(false);
       setCsvUploadText('');
     } else {
@@ -418,7 +542,7 @@ export const AdminPage: React.FC = () => {
           <div className="text-[10px] font-bold uppercase tracking-widest text-[#D6342C]">
             Backoffice Management Portal
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
             Ai Printing Solutions Admin
           </h1>
         </div>
@@ -487,7 +611,7 @@ export const AdminPage: React.FC = () => {
           }`}
         >
           <Grid className="w-4 h-4 text-[#D6342C]" />
-          <span>Price Grid Editor (126-Cells)</span>
+          <span>Card Prices</span>
         </button>
 
         <button
@@ -540,7 +664,7 @@ export const AdminPage: React.FC = () => {
         </button>
       </div>
 
-      {(activeTab === 'pricegrid' || activeTab === 'products' || activeTab === 'settings') && (
+      {(activeTab === 'products' || activeTab === 'settings') && (
         <div className="p-3 bg-amber-50 border border-amber-300 text-amber-900 text-xs rounded">
           Changes on this tab are saved in this browser only and are not yet stored in the database.
         </div>
@@ -637,32 +761,80 @@ export const AdminPage: React.FC = () => {
       {/* ========================================================================= */}
       {activeTab === 'orders' && (
         <div className="space-y-6">
-          {/* Controls */}
-          <div className="flex flex-col sm:flex-row justify-between gap-4 bg-white p-4 rounded-lg border border-[#E6E0D6]">
-            <input
-              type="text"
-              placeholder="Search by order #, customer name, phone..."
-              value={orderSearch}
-              onChange={(e) => setOrderSearch(e.target.value)}
-              className="p-2 text-xs bg-[#FAF8F5] border border-[#E6E0D6] rounded w-full sm:w-80 focus:outline-hidden"
-            />
-
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500">Status filter:</span>
-              <select
-                value={orderStatusFilter}
-                onChange={(e) => setOrderStatusFilter(e.target.value)}
-                className="p-2 text-xs bg-[#FAF8F5] border border-[#E6E0D6] rounded font-medium"
+          {/* Status tabs */}
+          <div className="flex gap-2 overflow-x-auto pb-1 text-xs font-semibold">
+            {[
+              ['all', 'All'],
+              ['active', 'Active'],
+              ['new', 'New'],
+              ['confirmed', 'Confirmed'],
+              ['in_production', 'In Production'],
+              ['ready', 'Ready'],
+              ['delivered', 'Completed'],
+              ['cancelled', 'Cancelled'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setOrderStatusFilter(value)}
+                className={`shrink-0 px-3 py-1.5 rounded-full border transition-colors ${
+                  orderStatusFilter === value
+                    ? 'bg-[#0F1B2D] text-white border-[#0F1B2D]'
+                    : 'bg-white text-slate-600 border-[#E6E0D6] hover:border-[#0F1B2D]'
+                }`}
               >
-                <option value="all">All Statuses ({orders.length})</option>
-                <option value="new">New</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="in_production">In Production</option>
-                <option value="ready">Ready to Dispatch</option>
-                <option value="delivered">Delivered</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
+                {label} <span className="opacity-70">({statusCount(value)})</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Search + filters */}
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3 bg-white p-4 rounded-lg border border-[#E6E0D6] text-xs">
+            <div className="relative flex-grow">
+              <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="search"
+                placeholder="Search order #, name, phone, email, city or product…"
+                value={orderSearch}
+                onChange={(e) => setOrderSearch(e.target.value)}
+                className="w-full pl-8 pr-2 py-2 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden"
+              />
             </div>
+            <select
+              aria-label="Payment filter"
+              value={orderPaymentFilter}
+              onChange={(e) => setOrderPaymentFilter(e.target.value as typeof orderPaymentFilter)}
+              className="p-2 bg-[#FAF8F5] border border-[#E6E0D6] rounded font-medium"
+            >
+              <option value="all">All payments</option>
+              <option value="unpaid">Not paid yet</option>
+              <option value="verification_needed">Slip to check</option>
+              <option value="paid">Paid</option>
+              <option value="failed">Failed</option>
+            </select>
+            <select
+              aria-label="Date filter"
+              value={orderDateFilter}
+              onChange={(e) => setOrderDateFilter(e.target.value as typeof orderDateFilter)}
+              className="p-2 bg-[#FAF8F5] border border-[#E6E0D6] rounded font-medium"
+            >
+              <option value="all">All time</option>
+              <option value="today">Today</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+            </select>
+            <button
+              onClick={exportOrdersCSV}
+              disabled={filteredOrders.length === 0}
+              className="px-3 py-2 border border-[#0F1B2D] text-[#0F1B2D] font-semibold rounded flex items-center justify-center gap-1.5 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export CSV
+            </button>
+          </div>
+
+          <div className="text-xs text-slate-500">
+            Showing <strong className="text-[#0F1B2D]">{filteredOrders.length}</strong> of {orders.length} orders ·
+            Value <strong className="text-[#0F1B2D]">{formatLKR(filteredTotal)}</strong>
           </div>
 
           {/* Orders Table */}
@@ -670,49 +842,89 @@ export const AdminPage: React.FC = () => {
             <table className="w-full text-left text-xs">
               <thead className="bg-[#FAF8F5] border-b border-[#E6E0D6] text-slate-500 uppercase text-[10px]">
                 <tr>
-                  <th className="p-3">Order Number</th>
-                  <th className="p-3">Date</th>
+                  <th className="p-3">Order</th>
                   <th className="p-3">Customer</th>
+                  <th className="p-3">Items</th>
                   <th className="p-3">Payment</th>
                   <th className="p-3">Total</th>
                   <th className="p-3">Status</th>
-                  <th className="p-3">Action</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
+                {filteredOrders.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-slate-500">
+                      No orders match these filters.
+                    </td>
+                  </tr>
+                )}
                 {filteredOrders.map((o) => (
-                  <tr key={o.id} className="hover:bg-slate-50">
-                    <td className="p-3 font-mono font-bold text-[#0F1B2D]">{o.orderNumber}</td>
-                    <td className="p-3 text-slate-500">{new Date(o.createdAt).toLocaleDateString()}</td>
+                  <tr key={o.id} className="hover:bg-slate-50 align-top">
+                    <td className="p-3">
+                      <div className="font-mono font-bold text-[#0F1B2D]">{o.orderNumber}</div>
+                      <div className="text-[11px] text-slate-500">{new Date(o.createdAt).toLocaleDateString('en-GB')}</div>
+                    </td>
                     <td className="p-3">
                       <div className="font-bold text-[#0F1B2D]">{o.customerName}</div>
-                      <div className="text-[11px] text-slate-500">{o.customerPhone}</div>
+                      <div className="text-[11px] text-slate-500">{o.customerPhone} · {o.city}</div>
                     </td>
-                    <td className="p-3 uppercase text-[11px] font-semibold text-slate-700">
-                      {o.paymentMethod.replace('_', ' ')}
+                    <td className="p-3 max-w-[180px]">
+                      <div className="truncate text-slate-700" title={o.items.map((i) => i.product.name).join(', ')}>
+                        {o.items[0]?.product.name ?? '—'}
+                      </div>
+                      {o.items.length > 1 && <div className="text-[11px] text-slate-400">+{o.items.length - 1} more</div>}
                     </td>
-                    <td className="p-3 font-bold text-[#D6342C]">{formatLKR(o.total)}</td>
+                    <td className="p-3">
+                      <div className="uppercase text-[11px] font-semibold text-slate-700">{o.paymentMethod.replace('_', ' ')}</div>
+                      <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${PAYMENT_STATUS[o.paymentStatus].badge}`}>
+                        {PAYMENT_STATUS[o.paymentStatus].label}
+                      </span>
+                    </td>
+                    <td className="p-3 font-bold text-[#D6342C] whitespace-nowrap">{formatLKR(o.total)}</td>
                     <td className="p-3">
                       <select
+                        aria-label={`Status of ${o.orderNumber}`}
                         value={o.orderStatus}
                         onChange={(e) => updateOrder(o.id, { orderStatus: e.target.value as OrderStatus })}
-                        className="p-1 text-[11px] font-bold uppercase rounded border border-slate-300 bg-white"
+                        className={`p-1 text-[11px] font-bold uppercase rounded border ${ORDER_STATUS[o.orderStatus].badge}`}
                       >
-                        <option value="new">New</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="in_production">In Production</option>
-                        <option value="ready">Ready</option>
-                        <option value="delivered">Delivered</option>
-                        <option value="cancelled">Cancelled</option>
+                        {(Object.keys(ORDER_STATUS) as OrderStatus[]).map((st) => (
+                          <option key={st} value={st} className="bg-white text-slate-800">
+                            {ORDER_STATUS[st].label}
+                          </option>
+                        ))}
                       </select>
                     </td>
                     <td className="p-3">
-                      <button
-                        onClick={() => setSelectedOrder(o)}
-                        className="px-2.5 py-1 bg-[#0F1B2D] text-white text-[11px] font-semibold rounded hover:bg-[#182A45]"
-                      >
-                        Details
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {ACTIVE_STATUSES.includes(o.orderStatus) && (
+                          <button
+                            onClick={() => completeOrder(o)}
+                            title="Mark this order as completed"
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold rounded flex items-center gap-1"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Complete
+                          </button>
+                        )}
+                        <a
+                          href={orderWhatsAppUrl(o)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="WhatsApp customer"
+                          aria-label={`WhatsApp ${o.customerName}`}
+                          className="p-1.5 rounded border border-[#25D366]/40 text-[#128C7E] hover:bg-[#25D366]/10"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                        </a>
+                        <button
+                          onClick={() => setSelectedOrder(o)}
+                          className="px-2.5 py-1 bg-[#0F1B2D] text-white text-[11px] font-semibold rounded hover:bg-[#182A45]"
+                        >
+                          Details
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -745,7 +957,7 @@ export const AdminPage: React.FC = () => {
                   <div><strong>Email:</strong> {selectedOrder.customerEmail}</div>
                   <div><strong>Delivery Address:</strong> {selectedOrder.deliveryAddress}, {selectedOrder.city} ({selectedOrder.district})</div>
                   <div><strong>Payment Method:</strong> {selectedOrder.paymentMethod.replace('_', ' ')}</div>
-                  <div><strong>Order Status:</strong> {selectedOrder.orderStatus}</div>
+                  <div><strong>Order Status:</strong> {ORDER_STATUS[selectedOrder.orderStatus].label}</div>
                   <label className="flex items-center gap-2">
                     <strong>Payment Status:</strong>
                     <select
@@ -812,7 +1024,25 @@ export const AdminPage: React.FC = () => {
                   ))}
                 </div>
 
-                <div className="flex justify-end pt-4 border-t border-[#E6E0D6]">
+                <div className="flex flex-wrap justify-end gap-2 pt-4 border-t border-[#E6E0D6]">
+                  <a
+                    href={orderWhatsAppUrl(selectedOrder)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 border border-[#25D366]/50 text-[#128C7E] text-xs font-bold rounded flex items-center gap-1.5 hover:bg-[#25D366]/10"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    WhatsApp Customer
+                  </a>
+                  {ACTIVE_STATUSES.includes(selectedOrder.orderStatus) && (
+                    <button
+                      onClick={() => completeOrder(selectedOrder)}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      Mark Complete
+                    </button>
+                  )}
                   <button
                     onClick={() => setSelectedOrder(null)}
                     className="px-4 py-2 bg-[#0F1B2D] text-white text-xs font-bold rounded"
@@ -830,165 +1060,169 @@ export const AdminPage: React.FC = () => {
       {/* 3. PRICE GRID EDITOR (Prompt 5 Critical Feature) */}
       {/* ========================================================================= */}
       {activeTab === 'pricegrid' && (
-        <div className="space-y-6">
-          {/* Top Controls Bar */}
-          <div className="bg-white p-6 rounded-lg border border-[#E6E0D6] shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-widest text-[#D6342C]">
-                  Live Spreadsheet Grid
-                </div>
-                <h3 className="text-xl font-bold text-[#0F1B2D]">
-                  Visiting Cards Pricing Matrix (9 Paper Boards × 14 Quantities = 126 Cells)
-                </h3>
-              </div>
-
-              {/* Product Switcher */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setSelectedGridProduct('prod-vc-double')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded transition-colors ${
-                    selectedGridProduct === 'prod-vc-double'
-                      ? 'bg-[#0F1B2D] text-white'
-                      : 'bg-[#FAF8F5] text-slate-700 border border-slate-200'
-                  }`}
-                >
-                  Double Sided Cards
-                </button>
-                <button
-                  onClick={() => setSelectedGridProduct('prod-vc-single')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded transition-colors ${
-                    selectedGridProduct === 'prod-vc-single'
-                      ? 'bg-[#0F1B2D] text-white'
-                      : 'bg-[#FAF8F5] text-slate-700 border border-slate-200'
-                  }`}
-                >
-                  Single Sided Cards
-                </button>
-              </div>
+        <div className="space-y-5">
+          {/* Header: card type + save */}
+          <div className="bg-white p-5 rounded-lg border border-[#E6E0D6] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-[#0F1B2D]">Visiting Card Prices</h3>
+              <p className="text-xs text-slate-500">Choose a paper, change its prices, then press Save.</p>
             </div>
-
-            {/* Bulk Markup & CSV Tools */}
-            <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-[#E6E0D6]">
-              {/* Bulk % increase tool (e.g. +8% client requirement) */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-700">
-                  Bulk Percentage Adjustment:
-                </span>
-                <div className="flex items-center">
-                  <input
-                    type="number"
-                    value={bulkPercentInput}
-                    onChange={(e) => setBulkPercentInput(parseFloat(e.target.value) || 0)}
-                    className="w-16 p-1.5 text-xs border border-[#0F1B2D] rounded-l text-center font-bold"
-                  />
-                  <span className="bg-slate-100 border-y border-r border-[#0F1B2D] px-2 py-1.5 text-xs font-bold text-slate-700">
-                    %
-                  </span>
-                </div>
-                <button
-                  onClick={handleBulkPercent}
-                  className="px-3 py-1.5 bg-[#D6342C] hover:bg-[#B8251E] text-white text-xs font-bold rounded transition-colors flex items-center gap-1"
-                >
-                  <Percent className="w-3.5 h-3.5" />
-                  <span>Apply Across Entire 126 Grid</span>
-                </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex rounded border border-[#E6E0D6] p-0.5 bg-[#FAF8F5]">
+                {(
+                  [
+                    ['prod-vc-double', 'Double Sided'],
+                    ['prod-vc-single', 'Single Sided'],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    onClick={() => setSelectedGridProduct(id)}
+                    className={`px-3 py-1.5 text-xs font-bold rounded transition-colors ${
+                      selectedGridProduct === id ? 'bg-[#0F1B2D] text-white' : 'text-slate-600 hover:text-[#0F1B2D]'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
-
-              {/* CSV Import/Export */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleExportCSV}
-                  className="px-3 py-1.5 border border-[#0F1B2D] text-[#0F1B2D] text-xs font-semibold rounded hover:bg-slate-50 flex items-center gap-1.5"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Export CSV</span>
-                </button>
-                <button
-                  onClick={() => setShowCsvModal(true)}
-                  className="px-3 py-1.5 bg-[#0F1B2D] text-white text-xs font-semibold rounded hover:bg-[#182A45] flex items-center gap-1.5"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Import CSV</span>
-                </button>
-              </div>
+              <button
+                onClick={handleSavePrices}
+                disabled={!pricesDirty || isSavingPrices}
+                className="px-4 py-2 bg-[#D6342C] hover:bg-[#B8251E] text-white text-xs font-bold rounded flex items-center gap-1.5 transition-colors disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                {isSavingPrices ? 'Saving…' : pricesDirty ? 'Save Prices' : 'All Saved'}
+              </button>
             </div>
-
-            {gridSaveToast && (
-              <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded text-emerald-800 text-xs font-bold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Price matrix recalculation applied and live in storefront!</span>
-              </div>
-            )}
           </div>
 
-          {/* SPREADSHEET MATRIX TABLE */}
-          <div className="bg-white rounded-lg border border-[#E6E0D6] shadow-xs overflow-x-auto max-h-[600px] relative">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-[#0F1B2D] text-white sticky top-0 z-20">
-                <tr>
-                  <th className="p-2.5 font-bold uppercase text-[10px] tracking-wider border border-[#1E2E46] sticky left-0 bg-[#0F1B2D] min-w-[200px]">
-                    Paper Board Option
-                  </th>
-                  {VISITING_CARD_QUANTITIES.map((q) => (
-                    <th
-                      key={q.id}
-                      className="p-2.5 font-bold uppercase text-[10px] tracking-wider border border-[#1E2E46] text-center min-w-[90px]"
-                    >
-                      {q.count} Cards
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {VISITING_CARD_PAPERS.map((paper, pIdx) => (
-                  <tr
+          {pricesDirty && (
+            <div className="p-3 bg-amber-50 border border-amber-300 text-amber-900 text-xs rounded">
+              You have unsaved changes. Customers still see the old prices until you press <strong>Save Prices</strong>.
+            </div>
+          )}
+          {gridSaveToast && (
+            <div className="p-3 bg-emerald-50 border border-emerald-300 rounded text-emerald-800 text-xs font-bold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              Prices saved. Customers now see the new prices.
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            {/* Step 1: paper */}
+            <div className="lg:col-span-4 bg-white rounded-lg border border-[#E6E0D6] shadow-xs overflow-hidden">
+              <div className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-[#E6E0D6]">
+                1. Choose paper
+              </div>
+              {VISITING_CARD_PAPERS.map((paper) => {
+                const isSelected = gridPaperId === paper.id;
+                return (
+                  <button
                     key={paper.id}
-                    className={pIdx % 2 === 0 ? 'bg-white' : 'bg-[#FAF8F5]'}
+                    onClick={() => setGridPaperId(paper.id)}
+                    className={`w-full text-left px-4 py-2.5 text-xs border-b border-[#F0EBE1] last:border-0 flex justify-between items-center gap-3 transition-colors ${
+                      isSelected ? 'bg-[#0F1B2D] text-white' : 'text-[#0F1B2D] hover:bg-[#FAF8F5]'
+                    }`}
                   >
-                    {/* Paper Label (Sticky Left) */}
-                    <td className="p-2.5 font-semibold text-[#0F1B2D] border border-[#E6E0D6] sticky left-0 bg-inherit shadow-xs">
-                      <div>{paper.label}</div>
-                      <div className="text-[10px] text-slate-400 font-normal capitalize">
-                        {paper.finishType}
-                      </div>
-                    </td>
+                    <span className="font-semibold">{paper.label}</span>
+                    <span className={`shrink-0 text-[11px] ${isSelected ? 'text-slate-300' : 'text-slate-400'}`}>
+                      from {formatLKR(gridPrice(paper.id, VISITING_CARD_QUANTITIES[0].id))}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
 
-                    {/* Quantity Cells */}
-                    {VISITING_CARD_QUANTITIES.map((qty) => {
-                      const cells = priceMatrix[selectedGridProduct] || [];
-                      const cell = cells.find(
-                        (c) => c.optionValueA === paper.id && c.optionValueB === qty.id
-                      );
-                      const currentPrice = cell ? cell.price : 0;
-
-                      return (
-                        <td
-                          key={qty.id}
-                          className="p-1 border border-[#E6E0D6] text-center hover:bg-amber-50/70 transition-colors"
-                        >
+            {/* Step 2: prices for that paper */}
+            <div className="lg:col-span-8 bg-white rounded-lg border border-[#E6E0D6] shadow-xs overflow-hidden">
+              <div className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-[#E6E0D6]">
+                2. Set prices — {VISITING_CARD_PAPERS.find((p) => p.id === gridPaperId)?.label}
+              </div>
+              <table className="w-full text-xs">
+                <thead className="text-[10px] uppercase text-slate-500 bg-[#FAF8F5]">
+                  <tr>
+                    <th className="px-4 py-2 text-left">Quantity</th>
+                    <th className="px-4 py-2 text-left">Price (Rs.)</th>
+                    <th className="px-4 py-2 text-right">Per card</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {VISITING_CARD_QUANTITIES.map((qty) => {
+                    const price = gridPrice(gridPaperId, qty.id);
+                    return (
+                      <tr key={qty.id} className="hover:bg-[#FAF8F5]">
+                        <td className="px-4 py-1.5 font-semibold text-[#0F1B2D]">{qty.label}</td>
+                        <td className="px-4 py-1.5">
                           <input
                             type="number"
+                            min="0"
                             step="50"
-                            value={currentPrice}
-                            onChange={(e) =>
-                              updatePriceCell(
-                                selectedGridProduct,
-                                paper.id,
-                                qty.id,
-                                parseFloat(e.target.value) || 0
-                              )
-                            }
-                            className="w-full p-1.5 text-center text-xs font-bold text-slate-800 bg-transparent hover:bg-white focus:bg-white focus:ring-1 focus:ring-[#0F1B2D] rounded outline-hidden"
+                            aria-label={`Price for ${qty.label}`}
+                            value={price}
+                            onChange={(e) => setGridPrice(gridPaperId, qty.id, parseFloat(e.target.value) || 0)}
+                            className="w-32 p-1.5 font-bold text-slate-800 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:border-[#0F1B2D] outline-hidden"
                           />
                         </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        <td className="px-4 py-1.5 text-right text-slate-500">{formatLKR(price / qty.count)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {/* Quick percentage change */}
+              <div className="p-4 border-t border-[#E6E0D6] bg-[#FAF8F5] flex flex-wrap items-center gap-2 text-xs">
+                <Percent className="w-4 h-4 text-[#D6342C]" />
+                <span className="font-bold text-slate-700">Change prices by</span>
+                <input
+                  type="number"
+                  aria-label="Percentage change"
+                  value={bulkPercentInput}
+                  onChange={(e) => setBulkPercentInput(parseFloat(e.target.value) || 0)}
+                  className="w-16 p-1.5 text-center font-bold border border-[#E6E0D6] rounded bg-white"
+                />
+                <span className="font-bold text-slate-700">%</span>
+                <button
+                  onClick={() => applyPercent('paper')}
+                  className="px-3 py-1.5 bg-white border border-[#0F1B2D] text-[#0F1B2D] font-semibold rounded hover:bg-slate-50"
+                >
+                  This paper
+                </button>
+                <button
+                  onClick={() => applyPercent('all')}
+                  className="px-3 py-1.5 bg-[#0F1B2D] text-white font-semibold rounded hover:bg-[#182A45]"
+                >
+                  All papers
+                </button>
+                <span className="text-slate-400">Use a minus number to lower prices, e.g. -5</span>
+              </div>
+            </div>
           </div>
+
+          {/* Spreadsheet tools, out of the way */}
+          <details className="bg-white rounded-lg border border-[#E6E0D6] text-xs">
+            <summary className="cursor-pointer px-4 py-3 font-semibold text-slate-600">
+              Spreadsheet import / export (advanced)
+            </summary>
+            <div className="px-4 pb-4 flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleExportCSV}
+                className="px-3 py-1.5 border border-[#0F1B2D] text-[#0F1B2D] font-semibold rounded hover:bg-slate-50 flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Export CSV
+              </button>
+              <button
+                onClick={() => setShowCsvModal(true)}
+                className="px-3 py-1.5 bg-[#0F1B2D] text-white font-semibold rounded hover:bg-[#182A45] flex items-center gap-1.5"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Import CSV
+              </button>
+              <span className="text-slate-400">Edit all 126 prices in Excel, then paste them back.</span>
+            </div>
+          </details>
 
           {/* CSV Import Modal */}
           {showCsvModal && (

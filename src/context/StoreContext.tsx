@@ -71,6 +71,7 @@ interface StoreContextType {
   loginAdmin: (username: string, password: string) => Promise<string | null>; // null = success, else error message
   logoutAdmin: () => Promise<void>;
   refreshAdminData: () => Promise<void>;
+  savePriceMatrix: () => Promise<string | null>; // null = saved, else error message
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -123,15 +124,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
 
   // Price matrix keyed by productId
-  const [priceMatrix, setPriceMatrix] = useState<Record<string, PriceMatrixCell[]>>(() => load('aiprint_price_matrix', () => ({
+  const [priceMatrix, setPriceMatrix] = useState<Record<string, PriceMatrixCell[]>>(() => ({
     'prod-vc-double': generateCardPriceMatrix('prod-vc-double', true),
     'prod-vc-single': generateCardPriceMatrix('prod-vc-single', false),
-  })));
+  }));
 
   // Persist changes
   useEffect(() => save('aiprint_cart', cart), [cart]);
   useEffect(() => save('aiprint_orders', orders), [orders]);
-  useEffect(() => save('aiprint_price_matrix', priceMatrix), [priceMatrix]);
+
+  // Prices saved by staff in the admin panel override the built-in defaults for every visitor
+  useEffect(() => {
+    supabase
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'price_matrix')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.value) setPriceMatrix(data.value as Record<string, PriceMatrixCell[]>);
+      });
+  }, []);
+
+  const savePriceMatrix = async (): Promise<string | null> => {
+    const { error } = await supabase
+      .from('site_settings')
+      .upsert({ key: 'price_matrix', value: priceMatrix, updated_at: new Date().toISOString() });
+    return error ? error.message : null;
+  };
   useEffect(() => save('aiprint_settings', siteSettings), [siteSettings]);
   useEffect(() => save(PRODUCTS_KEY, products), [products]);
 
@@ -489,6 +508,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         loginAdmin,
         logoutAdmin,
         refreshAdminData,
+        savePriceMatrix,
       }}
     >
       {children}
