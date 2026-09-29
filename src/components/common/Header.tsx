@@ -47,8 +47,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCart }) => {
     <header
       className={`sticky top-0 z-40 w-full transition-all duration-200 ${
         isScrolled
-          ? 'bg-[#FAF8F5]/95 backdrop-blur-md shadow-sm border-b border-[#E6E0D6] py-2.5'
-          : 'bg-[#FAF8F5] border-b border-[#E6E0D6] py-4'
+          ? 'bg-[#FAF8F5]/75 backdrop-blur-md backdrop-saturate-150 shadow-sm border-b border-[#E6E0D6]/70 py-2.5'
+          : 'bg-[#FAF8F5]/70 backdrop-blur-md backdrop-saturate-150 border-b border-[#E6E0D6]/50 py-4'
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between">

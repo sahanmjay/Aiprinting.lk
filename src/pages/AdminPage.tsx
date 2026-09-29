@@ -147,7 +147,7 @@ export const AdminPage: React.FC = () => {
       basePrice: 1000,
       shortDescription: '',
       longDescription: '',
-      imageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=85',
+      imageUrl: '/images/products/placeholder.webp',
       deliveryNote: 'Island-wide delivery within 1–2 days, Rs. 400 extra.',
       sizeNote: '',
       isHot: false,
@@ -212,7 +212,7 @@ export const AdminPage: React.FC = () => {
             productId: editingProduct.id,
             imageUrl:
               productForm.imageUrl ||
-              'https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&w=800&q=85',
+              '/images/products/placeholder.webp',
             altText: productForm.name,
             sortOrder: 1,
             isPrimary: true,
@@ -243,7 +243,7 @@ export const AdminPage: React.FC = () => {
             productId: `prod-temp`,
             imageUrl:
               productForm.imageUrl ||
-              'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=85',
+              '/images/products/placeholder.webp',
             altText: productForm.name,
             sortOrder: 1,
             isPrimary: true,
@@ -1350,7 +1350,7 @@ export const AdminPage: React.FC = () => {
                     {/* Thumbnail & Badges */}
                     <div className="relative aspect-16/9 bg-slate-100 overflow-hidden border-b border-[#E6E0D6]">
                       <img
-                        src={p.images[0]?.imageUrl || 'https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&w=800&q=85'}
+                        src={p.images[0]?.imageUrl || '/images/products/placeholder.webp'}
                         alt={p.name}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
@@ -1546,8 +1546,8 @@ export const AdminPage: React.FC = () => {
                     <label className="font-bold text-slate-700">Primary Image URL</label>
                     <div className="flex gap-2">
                       <input
-                        type="url"
-                        placeholder="https://images.unsplash.com/..."
+                        type="text"
+                        placeholder="/images/products/... or https://..."
                         value={productForm.imageUrl}
                         onChange={(e) => setProductForm({ ...productForm, imageUrl: e.target.value })}
                         className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden"
@@ -1562,74 +1562,29 @@ export const AdminPage: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    {/* Preset Image Quick Selector */}
+                    {/* Real photo presets (files in public/images/products) */}
                     <div className="flex flex-wrap gap-1.5 pt-1">
-                      <span className="text-[10px] text-slate-400">Sample Presets:</span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setProductForm({
-                            ...productForm,
-                            imageUrl:
-                              'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=85',
-                          })
-                        }
-                        className="text-[10px] px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700"
-                      >
-                        Stickers
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setProductForm({
-                            ...productForm,
-                            imageUrl:
-                              'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=800&q=85',
-                          })
-                        }
-                        className="text-[10px] px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700"
-                      >
-                        Bill Books
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setProductForm({
-                            ...productForm,
-                            imageUrl:
-                              'https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&w=800&q=85',
-                          })
-                        }
-                        className="text-[10px] px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700"
-                      >
-                        Visiting Cards
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setProductForm({
-                            ...productForm,
-                            imageUrl:
-                              'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=800&q=85',
-                          })
-                        }
-                        className="text-[10px] px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700"
-                      >
-                        Posters
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setProductForm({
-                            ...productForm,
-                            imageUrl:
-                              'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?auto=format&fit=crop&w=800&q=85',
-                          })
-                        }
-                        className="text-[10px] px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700"
-                      >
-                        Letterheads
-                      </button>
+                      <span className="text-[10px] text-slate-400">Our photos:</span>
+                      {[
+                        ['Visiting Cards', 'visiting-cards/1'],
+                        ['Bill Books', 'bill-books/2'],
+                        ['Leaflets', 'leaflets/4'],
+                        ['Invitations', 'invitations/4'],
+                        ['Letterheads', 'letterheads/1'],
+                        ['Certificates', 'certificates/1'],
+                        ['Stickers', 'stickers/4'],
+                        ['Envelopes', 'envelopes/2'],
+                        ['No photo yet', 'placeholder'],
+                      ].map(([label, photo]) => (
+                        <button
+                          key={photo}
+                          type="button"
+                          onClick={() => setProductForm({ ...productForm, imageUrl: `/images/products/${photo}.webp` })}
+                          className="text-[10px] px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700"
+                        >
+                          {label}
+                        </button>
+                      ))}
                     </div>
                   </div>
 

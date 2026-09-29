@@ -42,7 +42,7 @@ export const AboutPage: React.FC = () => {
             <div className="bg-white p-4 sm:p-6 rounded-lg border border-[#E6E0D6] shadow-lg relative space-y-4">
               <div className="aspect-4/3 rounded overflow-hidden bg-slate-100 border border-[#E6E0D6]">
                 <img
-                  src="https://images.unsplash.com/photo-1562564055-71e051d33c19?auto=format&fit=crop&w=800&q=85"
+                  src="/images/products/visiting-cards/2.webp"
                   alt="Printing facility press"
                   className="w-full h-full object-cover"
                 />

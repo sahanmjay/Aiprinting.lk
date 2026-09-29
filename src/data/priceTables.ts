@@ -229,6 +229,16 @@ export const PRICE_TABLES: Record<string, PriceTable> = {
     ],
     cols: ['10 Sheets', '25 Sheets', '50 Sheets', '75 Sheets', '100 Sheets', '200 Sheets', '500 Sheets', '1,000 Sheets'],
   },
+  'prod-envelopes': {
+    rowName: 'Size',
+    colName: 'Quantity',
+    rows: [
+      'DL (220 × 110 mm)',
+      'C5 (229 × 162 mm) — fits A5',
+      'C4 (324 × 229 mm) — fits A4',
+    ],
+    cols: ['100 Envelopes', '250 Envelopes', '500 Envelopes', '1,000 Envelopes'],
+  },
   'prod-pvc-id': {
     rowName: 'Card',
     colName: 'Quantity',

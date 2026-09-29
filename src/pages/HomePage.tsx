@@ -20,20 +20,26 @@ import { RegistrationMark } from '../components/common/RegistrationMark';
 import { SEED_TESTIMONIALS, SEED_CLIENT_LOGOS } from '../data/seedData';
 import { getWhatsAppUrl } from '../lib/formatters';
 import { FlowButton } from '../components/ui/flow-button';
+import { HeroBackdrop, HeroProductSlider, useHeroSlider, useHeroSlides } from '../components/home/HeroShowcase';
 
 export const HomePage: React.FC = () => {
   const { categories, products, siteSettings, getFromPrice } = useStore();
 
   const featuredProducts = products.filter((p) => p.isFeatured || p.isHot).slice(0, 4);
+  const heroSlides = useHeroSlides();
+  const { index: heroIndex, go: goHero, setPaused: pauseHero } = useHeroSlider(heroSlides.length);
 
   return (
     <div className="space-y-16 sm:space-y-24 pb-16">
       {/* 1. HERO SECTION */}
-      <section className="relative bg-[#0F1B2D] text-[#FAF8F5] pt-12 sm:pt-20 pb-16 sm:pb-24 overflow-hidden">
+      {/* Slides up under the see-through header (73px phone / 77px sm+) and fills the first screen on desktop */}
+      <section className="relative bg-[#0F1B2D] text-[#FAF8F5] -mt-[73px] sm:-mt-[77px] pt-[121px] sm:pt-[157px] pb-16 sm:pb-24 overflow-hidden lg:min-h-[calc(100svh-29px)] lg:flex lg:items-center lg:pt-[117px] lg:pb-10">
+        {/* Real-photo backdrop that changes with the product slider */}
+        <HeroBackdrop slides={heroSlides} index={heroIndex} />
         {/* Subtle Halftone Pattern */}
         <div className="absolute inset-0 opacity-10 bg-halftone pointer-events-none" />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
+        <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             {/* Left Copy */}
             <div className="lg:col-span-7 space-y-6 text-left animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -85,59 +91,9 @@ export const HomePage: React.FC = () => {
               </div>
             </div>
 
-            {/* Right Visual Card Showcase */}
+            {/* Right: featured product slider */}
             <div className="lg:col-span-5 animate-in fade-in slide-in-from-bottom-4 duration-700 [animation-delay:150ms]">
-              <div className="relative mx-auto max-w-md bg-[#FAF8F5] text-[#2B2B2B] p-6 rounded-lg shadow-2xl border border-white/20 space-y-4">
-                <div className="flex items-center justify-between border-b border-[#E6E0D6] pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#D6342C]" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-[#0F1B2D]">
-                      Bestseller Spotlight
-                    </span>
-                  </div>
-                  <span className="text-xs font-bold text-[#D6342C] bg-[#D6342C]/10 px-2 py-0.5 rounded">
-                    HOT
-                  </span>
-                </div>
-
-                <div className="rounded overflow-hidden border border-[#E6E0D6] aspect-4/3 relative group">
-                  <img
-                    src="https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&w=800&q=85"
-                    alt="Double Sided Visiting Cards"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    loading="eager"
-                  />
-                  <div className="absolute bottom-2 left-2 bg-[#0F1B2D]/90 text-white text-[11px] px-2.5 py-1 rounded backdrop-blur-xs font-medium">
-                    8 Premium Board Stocks
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <h3 className="font-bold text-lg text-[#0F1B2D]">
-                    Double Sided Visiting Cards
-                  </h3>
-                  <p className="text-xs text-slate-600">
-                    Gloss, matte, metallic gold/silver, or textured conqueror laid.
-                  </p>
-                </div>
-
-                <div className="pt-2 border-t border-[#E6E0D6] flex items-center justify-between">
-                  <div>
-                    <div className="text-[10px] uppercase text-slate-500 font-semibold tracking-wider">
-                      Starting From
-                    </div>
-                    <div className="text-base font-bold text-[#0F1B2D]">
-                      {formatLKR(1300)} <span className="text-xs font-normal text-slate-500">/ 100 cards</span>
-                    </div>
-                  </div>
-                  <Link
-                    to="/product/double-sided-visiting-cards"
-                    className="px-4 py-2 bg-[#0F1B2D] hover:bg-[#182A45] text-white text-xs font-bold rounded transition-colors"
-                  >
-                    Configure Now &rarr;
-                  </Link>
-                </div>
-              </div>
+              <HeroProductSlider slides={heroSlides} index={heroIndex} go={goHero} setPaused={pauseHero} />
             </div>
           </div>
         </div>

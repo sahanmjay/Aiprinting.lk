@@ -1,0 +1,536 @@
+- generic [active] [ref=f3e1]:
+  - status "Loading" [ref=f3e2]:
+    - generic [ref=f3e3]:
+      - generic [ref=f3e4]: A
+      - generic [ref=f3e5]: I
+      - generic [ref=f3e7]: P
+      - generic [ref=f3e8]: R
+      - generic [ref=f3e9]: I
+      - generic [ref=f3e10]: "N"
+      - generic [ref=f3e11]: T
+      - generic [ref=f3e12]: I
+      - generic [ref=f3e13]: "N"
+      - generic [ref=f3e14]: G
+  - generic [ref=f3e18]:
+    - generic [ref=f3e20]:
+      - generic [ref=f3e21]: Island-wide delivery in 1–2 days · Free proofing check on all orders
+      - generic [ref=f3e28]:
+        - 'link "Hotline: 077 323 3533" [ref=f3e29] [cursor=pointer]':
+          - /url: tel:0773233533
+          - generic [ref=f3e32]: "Hotline:"
+          - text: 077 323 3533
+        - generic [ref=f3e33]: "|"
+        - 'link "Landline: 011 215 0859" [ref=f3e34] [cursor=pointer]':
+          - /url: tel:0112150859
+        - generic [ref=f3e36]: "|"
+        - link "contactus@aiprintingsolutions.com" [ref=f3e37] [cursor=pointer]:
+          - /url: mailto:contactus@aiprintingsolutions.com
+    - banner [ref=f3e42]:
+      - generic [ref=f3e43]:
+        - link "Ai Printing Solutions — home" [ref=f3e44] [cursor=pointer]:
+          - /url: /
+          - img "Ai Printing Solutions" [ref=f3e45]
+        - navigation [ref=f3e46]:
+          - link "Home" [ref=f3e47] [cursor=pointer]:
+            - /url: /
+          - button "Products" [ref=f3e49]
+          - link "Visiting Cards" [ref=f3e53] [cursor=pointer]:
+            - /url: /product/double-sided-visiting-cards
+          - link "Bill Books" [ref=f3e54] [cursor=pointer]:
+            - /url: /product/carbonized-ncr-bill-books
+          - link "Custom Quote" [ref=f3e55] [cursor=pointer]:
+            - /url: /quote
+          - link "About" [ref=f3e56] [cursor=pointer]:
+            - /url: /about
+          - link "FAQ" [ref=f3e57] [cursor=pointer]:
+            - /url: /faq
+          - link "Contact" [ref=f3e58] [cursor=pointer]:
+            - /url: /contact
+        - generic [ref=f3e59]:
+          - link "WhatsApp Us" [ref=f3e60] [cursor=pointer]:
+            - /url: https://wa.me/94773233533?text=Hi%20Ai%20Printing%2C%20I'd%20like%20to%20ask%20about%20your%20printing%20services.
+          - link "Sign in or register" [ref=f3e64] [cursor=pointer]:
+            - /url: /account
+          - link "Shopping Cart" [ref=f3e68] [cursor=pointer]:
+            - /url: /cart
+    - main [ref=f3e72]:
+      - generic [ref=f3e74]:
+        - generic [ref=f3e80]:
+          - generic [ref=f3e81]:
+            - generic [ref=f3e82]:
+              - generic "CMYK Calibration Standard" [ref=f3e83]:
+                - generic [ref=f3e87]:
+                  - generic "Cyan" [ref=f3e88]
+                  - generic "Magenta" [ref=f3e89]
+                  - generic "Yellow" [ref=f3e90]
+                  - generic "Key Black" [ref=f3e91]
+              - generic [ref=f3e92]: Commercial Printing Facility · Boralesgamuwa, Sri Lanka
+            - heading "Precision print, delivered on time to your doorstep." [level=1] [ref=f3e93]
+            - paragraph [ref=f3e94]: From luxury double-sided visiting cards in 8 speciality boards to carbonless bill books and marketing collateral. Real-time pricing matrix and reliable 1–2 day island-wide delivery.
+            - generic [ref=f3e95]:
+              - link "Order Visiting Cards" [ref=f3e96] [cursor=pointer]:
+                - /url: /product/double-sided-visiting-cards
+              - link "Request Custom Quote" [ref=f3e103] [cursor=pointer]:
+                - /url: /quote
+            - generic [ref=f3e110]:
+              - generic [ref=f3e111]: No hidden setup fees
+              - generic [ref=f3e116]: Free digital PDF proof
+              - generic [ref=f3e121]: Island-wide 1–2 days
+          - region "Featured products" [ref=f3e127]:
+            - generic [ref=f3e128]:
+              - 'group "1 of 5: Double Sided Visiting Cards" [ref=f3e129]':
+                - generic [ref=f3e130]:
+                  - generic [ref=f3e131]: Bestseller
+                  - generic [ref=f3e134]: HOT
+                - link "Double sided visiting cards 8 premium board stocks" [ref=f3e137] [cursor=pointer]:
+                  - /url: /product/double-sided-visiting-cards
+                  - img "Double sided visiting cards" [ref=f3e138]
+                  - generic [ref=f3e139]: 8 premium board stocks
+                - generic [ref=f3e140]:
+                  - heading "Double Sided Visiting Cards" [level=3] [ref=f3e141]
+                  - paragraph [ref=f3e142]: Full colour on both sides, on 8 premium boards from gloss art board to metallic and textured laid.
+                - generic [ref=f3e143]:
+                  - generic [ref=f3e144]:
+                    - generic [ref=f3e145]: Starting From
+                    - generic [ref=f3e146]:
+                      - text: Rs. 1,300.00
+                      - generic [ref=f3e147]: / 100 Cards
+                  - link "Configure Now →" [ref=f3e148] [cursor=pointer]:
+                    - /url: /product/double-sided-visiting-cards
+              - group [aria-hidden] [ref=f3e149]:
+                - generic [ref=f3e150]: Business essential
+                - link [ref=f3e154] [cursor=pointer]:
+                  - /url: /product/carbonized-ncr-bill-books
+                  - generic [ref=f3e156]: Duplicate & triplicate NCR
+                - generic [ref=f3e157]:
+                  - heading [level=3] [ref=f3e158]: Carbonized (NCR) Bill Books
+                  - paragraph [ref=f3e159]: Carbonless duplicate (2-ply) and triplicate (3-ply) invoice books with perforated tear-off pages.
+                - generic [ref=f3e160]:
+                  - generic [ref=f3e161]:
+                    - generic [ref=f3e162]: Starting From
+                    - generic [ref=f3e163]:
+                      - text: Rs. 3,500.00
+                      - generic [ref=f3e164]: / 2 Books
+                  - link [ref=f3e165] [cursor=pointer]:
+                    - /url: /product/carbonized-ncr-bill-books
+                    - text: Configure Now →
+              - group [aria-hidden] [ref=f3e166]:
+                - generic [ref=f3e167]: Marketing
+                - link [ref=f3e171] [cursor=pointer]:
+                  - /url: /product/double-side-leaflets
+                  - generic [ref=f3e173]: Offset printed from 500 copies
+                - generic [ref=f3e174]:
+                  - heading [level=3] [ref=f3e175]: Double Side Leaflets
+                  - paragraph [ref=f3e176]: Full-colour leaflets printed on both sides, A5 or A4, on 120gsm or 150gsm coated art paper.
+                - generic [ref=f3e177]:
+                  - generic [ref=f3e178]:
+                    - generic [ref=f3e179]: Price
+                    - generic [ref=f3e180]: To be confirmed
+                  - link [ref=f3e181] [cursor=pointer]:
+                    - /url: /product/double-side-leaflets
+                    - text: Get a Price →
+              - group [aria-hidden] [ref=f3e182]:
+                - generic [ref=f3e183]: Product labels
+                - link [ref=f3e187] [cursor=pointer]:
+                  - /url: /product/colour-stickers
+                  - generic [ref=f3e189]: Gloss or matt sticker sheets
+                - generic [ref=f3e190]:
+                  - heading [level=3] [ref=f3e191]: Colour Stickers
+                  - paragraph [ref=f3e192]: Full-colour sticker sheets (10 × 15 inch) in gloss or matt finish.
+                - generic [ref=f3e193]:
+                  - generic [ref=f3e194]:
+                    - generic [ref=f3e195]: Price
+                    - generic [ref=f3e196]: To be confirmed
+                  - link [ref=f3e197] [cursor=pointer]:
+                    - /url: /product/colour-stickers
+                    - text: Get a Price →
+              - group [aria-hidden] [ref=f3e198]:
+                - generic [ref=f3e199]: Celebrations
+                - link [ref=f3e203] [cursor=pointer]:
+                  - /url: /product/invitation-cards-single-side
+                  - generic [ref=f3e205]: White or metallic envelopes
+                - generic [ref=f3e206]:
+                  - heading [level=3] [ref=f3e207]: Invitation Cards — Single Side
+                  - paragraph [ref=f3e208]: Flat (non-folding) cards for invitations, announcements and postcards on 260–300gsm board.
+                - generic [ref=f3e209]:
+                  - generic [ref=f3e210]:
+                    - generic [ref=f3e211]: Price
+                    - generic [ref=f3e212]: To be confirmed
+                  - link [ref=f3e213] [cursor=pointer]:
+                    - /url: /product/invitation-cards-single-side
+                    - text: Get a Price →
+            - generic [ref=f3e214]:
+              - button "Previous product" [ref=f3e215]
+              - generic [ref=f3e218]:
+                - button "Show Double Sided Visiting Cards" [ref=f3e219]
+                - button "Show Carbonized (NCR) Bill Books" [ref=f3e220]
+                - button "Show Double Side Leaflets" [ref=f3e221]
+                - button "Show Colour Stickers" [ref=f3e222]
+                - button "Show Invitation Cards — Single Side" [ref=f3e223]
+              - button "Next product" [ref=f3e224]
+        - generic [ref=f3e228]:
+          - generic [ref=f3e229]:
+            - heading "Money-Back Guarantee" [level=3] [ref=f3e234]
+            - paragraph [ref=f3e235]: Everything we print is guaranteed. If you're not satisfied, for any reason, return it for a reprint, credit or refund.
+          - generic [ref=f3e236]:
+            - heading "Island-Wide Delivery" [level=3] [ref=f3e243]
+            - paragraph [ref=f3e244]: Business cards or posters in a hurry? Delivered safely to any address in all 25 districts of Sri Lanka in 1–2 days.
+          - generic [ref=f3e245]:
+            - heading "1,000+ Happy Customers" [level=3] [ref=f3e252]
+            - paragraph [ref=f3e253]: Serving Sri Lanka's leading hotel chains, corporations, agencies, and entrepreneurs with commercial grade fidelity.
+        - generic [ref=f3e254]:
+          - generic [ref=f3e255]:
+            - generic [ref=f3e256]:
+              - generic [ref=f3e257]: Print Lines
+              - heading "Shop by Category" [level=2] [ref=f3e258]
+            - link "View Full Catalogue" [ref=f3e259] [cursor=pointer]:
+              - /url: /shop
+          - generic [ref=f3e263]:
+            - link "Visiting Cards Visiting Cards Single and double sided business cards on 8 premium boards — gloss, matte, metallic and textured laid. Explore →" [ref=f3e264] [cursor=pointer]:
+              - /url: /shop/visiting-cards
+              - img "Visiting Cards" [ref=f3e266]
+              - generic [ref=f3e267]:
+                - generic [ref=f3e268]:
+                  - heading "Visiting Cards" [level=4] [ref=f3e269]
+                  - paragraph [ref=f3e270]: Single and double sided business cards on 8 premium boards — gloss, matte, metallic and textured laid.
+                - generic [ref=f3e271]:
+                  - generic [ref=f3e272]: Explore
+                  - generic [ref=f3e273]: →
+            - link "Bill Books Bill Books Custom NCR carbonless invoice, cash receipt, and delivery challan books with sequential numbering. Explore →" [ref=f3e274] [cursor=pointer]:
+              - /url: /shop/bill-books
+              - img "Bill Books" [ref=f3e276]
+              - generic [ref=f3e277]:
+                - generic [ref=f3e278]:
+                  - heading "Bill Books" [level=4] [ref=f3e279]
+                  - paragraph [ref=f3e280]: Custom NCR carbonless invoice, cash receipt, and delivery challan books with sequential numbering.
+                - generic [ref=f3e281]:
+                  - generic [ref=f3e282]: Explore
+                  - generic [ref=f3e283]: →
+            - link "Leaflets Leaflets Vibrant promotional flyers and marketing leaflets on premium art paper for rapid distribution. Explore →" [ref=f3e284] [cursor=pointer]:
+              - /url: /shop/leaflets
+              - img "Leaflets" [ref=f3e286]
+              - generic [ref=f3e287]:
+                - generic [ref=f3e288]:
+                  - heading "Leaflets" [level=4] [ref=f3e289]
+                  - paragraph [ref=f3e290]: Vibrant promotional flyers and marketing leaflets on premium art paper for rapid distribution.
+                - generic [ref=f3e291]:
+                  - generic [ref=f3e292]: Explore
+                  - generic [ref=f3e293]: →
+            - link "Invitations Invitations Elegant wedding, corporate gala, and celebration cards with speciality creasing and folding. Explore →" [ref=f3e294] [cursor=pointer]:
+              - /url: /shop/invitations
+              - img "Invitations" [ref=f3e296]
+              - generic [ref=f3e297]:
+                - generic [ref=f3e298]:
+                  - heading "Invitations" [level=4] [ref=f3e299]
+                  - paragraph [ref=f3e300]: Elegant wedding, corporate gala, and celebration cards with speciality creasing and folding.
+                - generic [ref=f3e301]:
+                  - generic [ref=f3e302]: Explore
+                  - generic [ref=f3e303]: →
+            - link "Letterheads Letterheads Professional corporate stationery printed on high-grade laser-compatible offset bond papers. Explore →" [ref=f3e304] [cursor=pointer]:
+              - /url: /shop/letterheads
+              - img "Letterheads" [ref=f3e306]
+              - generic [ref=f3e307]:
+                - generic [ref=f3e308]:
+                  - heading "Letterheads" [level=4] [ref=f3e309]
+                  - paragraph [ref=f3e310]: Professional corporate stationery printed on high-grade laser-compatible offset bond papers.
+                - generic [ref=f3e311]:
+                  - generic [ref=f3e312]: Explore
+                  - generic [ref=f3e313]: →
+            - link "Posters Posters High-impact full-colour posters in A3, A2, and bespoke large formats with vibrant fade-resistant inks. Explore →" [ref=f3e314] [cursor=pointer]:
+              - /url: /shop/posters
+              - img "Posters" [ref=f3e316]
+              - generic [ref=f3e317]:
+                - generic [ref=f3e318]:
+                  - heading "Posters" [level=4] [ref=f3e319]
+                  - paragraph [ref=f3e320]: High-impact full-colour posters in A3, A2, and bespoke large formats with vibrant fade-resistant inks.
+                - generic [ref=f3e321]:
+                  - generic [ref=f3e322]: Explore
+                  - generic [ref=f3e323]: →
+            - link "Stickers Stickers Colour and black & white sticker sheets (10 × 15 inch) in gloss or matt finish. Explore →" [ref=f3e324] [cursor=pointer]:
+              - /url: /shop/stickers
+              - img "Stickers" [ref=f3e326]
+              - generic [ref=f3e327]:
+                - generic [ref=f3e328]:
+                  - heading "Stickers" [level=4] [ref=f3e329]
+                  - paragraph [ref=f3e330]: Colour and black & white sticker sheets (10 × 15 inch) in gloss or matt finish.
+                - generic [ref=f3e331]:
+                  - generic [ref=f3e332]: Explore
+                  - generic [ref=f3e333]: →
+            - link "Certificates Certificates Official diploma, award, and recognition certificates on thick textured parchment and laid stock. Explore →" [ref=f3e334] [cursor=pointer]:
+              - /url: /shop/certificates
+              - img "Certificates" [ref=f3e336]
+              - generic [ref=f3e337]:
+                - generic [ref=f3e338]:
+                  - heading "Certificates" [level=4] [ref=f3e339]
+                  - paragraph [ref=f3e340]: Official diploma, award, and recognition certificates on thick textured parchment and laid stock.
+                - generic [ref=f3e341]:
+                  - generic [ref=f3e342]: Explore
+                  - generic [ref=f3e343]: →
+            - link "Black Laser Printouts Black Laser Printouts High-speed black & white laser printing (up to 110 pages per minute) with one-day service. Explore →" [ref=f3e344] [cursor=pointer]:
+              - /url: /shop/black-laser-printouts
+              - img "Black Laser Printouts" [ref=f3e346]
+              - generic [ref=f3e347]:
+                - generic [ref=f3e348]:
+                  - heading "Black Laser Printouts" [level=4] [ref=f3e349]
+                  - paragraph [ref=f3e350]: High-speed black & white laser printing (up to 110 pages per minute) with one-day service.
+                - generic [ref=f3e351]:
+                  - generic [ref=f3e352]: Explore
+                  - generic [ref=f3e353]: →
+            - link "Colour Print Outs Colour Print Outs Colour prints on matt art paper and premium boards. Explore →" [ref=f3e354] [cursor=pointer]:
+              - /url: /shop/colour-print-outs
+              - img "Colour Print Outs" [ref=f3e356]
+              - generic [ref=f3e357]:
+                - generic [ref=f3e358]:
+                  - heading "Colour Print Outs" [level=4] [ref=f3e359]
+                  - paragraph [ref=f3e360]: Colour prints on matt art paper and premium boards.
+                - generic [ref=f3e361]:
+                  - generic [ref=f3e362]: Explore
+                  - generic [ref=f3e363]: →
+            - link "ID Cards ID Cards Durable PVC ID cards (86 × 54 mm) for staff, students and members. Explore →" [ref=f3e364] [cursor=pointer]:
+              - /url: /shop/id-cards
+              - img "ID Cards" [ref=f3e366]
+              - generic [ref=f3e367]:
+                - generic [ref=f3e368]:
+                  - heading "ID Cards" [level=4] [ref=f3e369]
+                  - paragraph [ref=f3e370]: Durable PVC ID cards (86 × 54 mm) for staff, students and members.
+                - generic [ref=f3e371]:
+                  - generic [ref=f3e372]: Explore
+                  - generic [ref=f3e373]: →
+            - link "Envelopes Envelopes Printed company envelopes with your logo and address. Explore →" [ref=f3e374] [cursor=pointer]:
+              - /url: /shop/envelopes
+              - img "Envelopes" [ref=f3e376]
+              - generic [ref=f3e377]:
+                - generic [ref=f3e378]:
+                  - heading "Envelopes" [level=4] [ref=f3e379]
+                  - paragraph [ref=f3e380]: Printed company envelopes with your logo and address.
+                - generic [ref=f3e381]:
+                  - generic [ref=f3e382]: Explore
+                  - generic [ref=f3e383]: →
+        - generic [ref=f3e384]:
+          - generic [ref=f3e386]:
+            - generic [ref=f3e387]: High Demand Lines
+            - heading "Featured Products" [level=2] [ref=f3e391]
+          - generic [ref=f3e392]:
+            - generic [ref=f3e393]:
+              - generic [ref=f3e394]:
+                - generic [ref=f3e395]:
+                  - img "Double Sided Visiting Cards" [ref=f3e396]
+                  - generic [ref=f3e397]: Hot
+                - generic [ref=f3e400]:
+                  - generic [ref=f3e401]: Visiting Cards
+                  - heading "Double Sided Visiting Cards" [level=3] [ref=f3e402]
+                  - paragraph [ref=f3e403]: Full colour on both sides, on 8 premium boards from gloss art board to metallic and textured laid.
+              - generic [ref=f3e404]:
+                - generic [ref=f3e405]:
+                  - generic [ref=f3e406]: From
+                  - generic [ref=f3e407]: Rs. 1,300.00
+                - link "Configure" [ref=f3e408] [cursor=pointer]:
+                  - /url: /product/double-sided-visiting-cards
+            - generic [ref=f3e409]:
+              - generic [ref=f3e410]:
+                - generic [ref=f3e411]:
+                  - img "Single Sided Visiting Cards" [ref=f3e412]
+                  - generic [ref=f3e413]: Hot
+                - generic [ref=f3e416]:
+                  - generic [ref=f3e417]: Visiting Cards
+                  - heading "Single Sided Visiting Cards" [level=3] [ref=f3e418]
+                  - paragraph [ref=f3e419]: All your details clearly on the front — the cost-effective choice, on 8 premium boards.
+              - generic [ref=f3e420]:
+                - generic [ref=f3e421]:
+                  - generic [ref=f3e422]: From
+                  - generic [ref=f3e423]: Rs. 1,000.00
+                - link "Configure" [ref=f3e424] [cursor=pointer]:
+                  - /url: /product/single-sided-visiting-cards
+            - generic [ref=f3e425]:
+              - generic [ref=f3e426]:
+                - img "Carbonized (NCR) Bill Books" [ref=f3e428]
+                - generic [ref=f3e429]:
+                  - generic [ref=f3e430]: Bill Books
+                  - heading "Carbonized (NCR) Bill Books" [level=3] [ref=f3e431]
+                  - paragraph [ref=f3e432]: Carbonless duplicate (2-ply) and triplicate (3-ply) invoice books with perforated tear-off pages.
+              - generic [ref=f3e433]:
+                - generic [ref=f3e434]:
+                  - generic [ref=f3e435]: From
+                  - generic [ref=f3e436]: Rs. 3,500.00
+                - link "Configure" [ref=f3e437] [cursor=pointer]:
+                  - /url: /product/carbonized-ncr-bill-books
+            - generic [ref=f3e438]:
+              - generic [ref=f3e439]:
+                - generic [ref=f3e440]:
+                  - img "Letter Heads" [ref=f3e441]
+                  - generic [ref=f3e442]: Hot
+                - generic [ref=f3e445]:
+                  - generic [ref=f3e446]: Letterheads
+                  - heading "Letter Heads" [level=3] [ref=f3e447]
+                  - paragraph [ref=f3e448]: A4 company letterheads on bank paper or premium Conqueror laid and vellum papers.
+              - generic [ref=f3e449]:
+                - generic [ref=f3e450]:
+                  - generic [ref=f3e451]: Price
+                  - generic [ref=f3e452]: On request
+                - link "Configure" [ref=f3e453] [cursor=pointer]:
+                  - /url: /product/letter-heads
+        - generic [ref=f3e455]:
+          - generic [ref=f3e456]:
+            - generic [ref=f3e457]: Streamlined Process
+            - heading "How Online Print Ordering Works" [level=2] [ref=f3e458]
+            - paragraph [ref=f3e459]: No endless phone calls or unclear invoices. Configure your exact options and track progress in 4 easy steps.
+          - generic [ref=f3e460]:
+            - generic [ref=f3e461]:
+              - generic [ref=f3e462]: "01"
+              - heading "Choose & Configure" [level=3] [ref=f3e463]
+              - paragraph [ref=f3e464]: Select your paper board, finish, and quantity. Watch the price recalculate automatically in real time.
+            - generic [ref=f3e465]:
+              - generic [ref=f3e466]: "02"
+              - heading "Upload Artwork" [level=3] [ref=f3e467]
+              - paragraph [ref=f3e468]: Drag & drop your print-ready PDF, AI, or PSD. Don't have artwork? Select "Design it for me" for Rs. 500.
+            - generic [ref=f3e469]:
+              - generic [ref=f3e470]: "03"
+              - heading "We Print & Finish" [level=3] [ref=f3e471]
+              - paragraph [ref=f3e472]: Our press technicians check CMYK bleed, expose plates, and execute precision cutting, scoring, or lamination.
+            - generic [ref=f3e473]:
+              - generic [ref=f3e474]: "04"
+              - heading "Island-Wide Delivery" [level=3] [ref=f3e475]
+              - paragraph [ref=f3e476]: Carefully packaged and dispatched via courier right to your office or home in 1–2 working days.
+        - generic [ref=f3e477]:
+          - generic [ref=f3e478]:
+            - generic [ref=f3e479]: Verified Client Reviews
+            - heading "What Our Clients Say" [level=2] [ref=f3e480]
+          - generic [ref=f3e481]:
+            - generic [ref=f3e482]:
+              - paragraph [ref=f3e495]: "\"Ai Printing Solutions has been our trusted print partner for our regional requirements. The paper stock quality, exact colour fidelity, and reliable timelines are unmatched in Sri Lanka. Their double-sided metallic visiting cards always receive compliments.\""
+              - generic [ref=f3e496]:
+                - generic [ref=f3e497]: M
+                - generic [ref=f3e498]:
+                  - heading "Ms. Dinushka Wimalaratne" [level=4] [ref=f3e499]
+                  - generic [ref=f3e500]: Complex Payable Manager, UAE Hotels
+            - generic [ref=f3e501]:
+              - paragraph [ref=f3e514]: "\"We shifted our corporate letterhead and carbonless invoice book printing to Ai Printing after frustrating delays elsewhere. Delivered to our Boralesgamuwa offices within 48 hours without a single defect. Highly recommended for commercial grade printing.\""
+              - generic [ref=f3e515]:
+                - generic [ref=f3e516]: M
+                - generic [ref=f3e517]:
+                  - heading "Mr. S.K.K. Wijesekara" [level=4] [ref=f3e518]
+                  - generic [ref=f3e519]: Managing Director, Colombo Enterprise
+            - generic [ref=f3e520]:
+              - paragraph [ref=f3e533]: "\"The 300gsm Ice Gold board visiting cards are stunning. The online pricing calculator makes quoting our clients effortless, and the team in Boralesgamuwa always checks our bleed marks before printing.\""
+              - generic [ref=f3e534]:
+                - generic [ref=f3e535]: K
+                - generic [ref=f3e536]:
+                  - heading "Kavinda Perera" [level=4] [ref=f3e537]
+                  - generic [ref=f3e538]: Creative Director, Studio Seven
+        - generic [ref=f3e539]:
+          - generic [ref=f3e540]: Trusted by Leading Organizations Across Sri Lanka
+          - generic [ref=f3e541]:
+            - generic [ref=f3e542]: Hemas Holdings
+            - generic [ref=f3e543]: Aitken Spence
+            - generic [ref=f3e544]: Ceylon Petroleum
+            - generic [ref=f3e545]: Dialog Axiata
+            - generic [ref=f3e546]: Commercial Bank
+            - generic [ref=f3e547]: John Keells
+            - generic [ref=f3e548]: Hayleys Group
+            - generic [ref=f3e549]: MAS Holdings
+            - generic [ref=f3e550]: Brandix
+            - generic [ref=f3e551]: Jetwing Hotels
+            - generic [ref=f3e552]: Cargills Ceylon
+            - generic [ref=f3e553]: Lanka IOC
+        - generic [ref=f3e555]:
+          - generic:
+            - generic "CMYK Calibration Standard":
+              - generic:
+                - generic "Cyan"
+                - generic "Magenta"
+                - generic "Yellow"
+                - generic "Key Black"
+          - generic [ref=f3e556]:
+            - generic [ref=f3e557]: Custom Quantities & Finishing On Request
+            - heading "Have a bulk order or custom specification?" [level=2] [ref=f3e562]
+            - paragraph [ref=f3e563]: Submit your RFQ specifications online. Our prepress team will deliver an accurate quotation and digital proof within 1 business day.
+          - generic [ref=f3e564]:
+            - link "Request a Custom Quote" [ref=f3e565] [cursor=pointer]:
+              - /url: /quote
+            - link "Direct WhatsApp" [ref=f3e572] [cursor=pointer]:
+              - /url: https://wa.me/94773233533?text=Hi%20Ai%20Printing%2C%20I'd%20like%20to%20ask%20about%20a%20bulk%20print%20order.
+    - contentinfo [ref=f3e576]:
+      - generic [ref=f3e577]:
+        - generic [ref=f3e578]:
+          - generic [ref=f3e579]:
+            - generic [ref=f3e580]: Ai Printing Solutions.
+            - paragraph [ref=f3e582]: Commercial printing in Sri Lanka — pre-press to fulfilment. High precision digital & offset commercial printing facility in Boralesgamuwa, serving Sri Lankan corporations, small businesses, and institutions nationwide.
+            - generic [ref=f3e583]:
+              - link "Facebook Page" [ref=f3e584] [cursor=pointer]:
+                - /url: https://facebook.com/aiprinting
+              - generic "CMYK Calibration Standard" [ref=f3e587]:
+                - generic [ref=f3e591]:
+                  - generic "Cyan" [ref=f3e592]
+                  - generic "Magenta" [ref=f3e593]
+                  - generic "Yellow" [ref=f3e594]
+                  - generic "Key Black" [ref=f3e595]
+          - generic [ref=f3e596]:
+            - heading "Contact Us" [level=4] [ref=f3e597]
+            - list [ref=f3e598]:
+              - listitem [ref=f3e599]:
+                - generic [ref=f3e603]: 11/A Gangarama Rd, Werahara, Boralesgamuwa, Sri Lanka
+              - listitem [ref=f3e604]:
+                - generic [ref=f3e607]:
+                  - generic [ref=f3e608]:
+                    - strong [ref=f3e609]: "Hotline:"
+                    - text: 077 323 3533
+                  - generic [ref=f3e610]:
+                    - strong [ref=f3e611]: "Landline:"
+                    - text: 011 215 0859
+              - listitem [ref=f3e612]:
+                - generic [ref=f3e616]:
+                  - generic [ref=f3e617]: contactus@aiprintingsolutions.com
+                  - generic [ref=f3e618]: "Artwork: digital4ai@gmail.com"
+          - generic [ref=f3e619]:
+            - heading "Production Hours" [level=4] [ref=f3e620]
+            - list [ref=f3e621]:
+              - listitem [ref=f3e622]:
+                - generic [ref=f3e626]:
+                  - generic [ref=f3e627]: "Mon–Fri: 8.30 AM – 5.00 PM"
+                  - generic [ref=f3e628]: "Saturday: 8.30 AM – 1.00 PM"
+                  - generic [ref=f3e629]: "Sunday: Closed"
+              - listitem [ref=f3e630]: Online orders are received 24/7. Jobs approved before 11:00 AM enter same-day production queue.
+            - iframe [ref=f3e632]
+          - generic [ref=f3e633]:
+            - heading "Popular Print Lines" [level=4] [ref=f3e634]
+            - list [ref=f3e635]:
+              - listitem [ref=f3e636]:
+                - link "Visiting Cards" [ref=f3e637] [cursor=pointer]:
+                  - /url: /shop/visiting-cards
+              - listitem [ref=f3e641]:
+                - link "Bill Books" [ref=f3e642] [cursor=pointer]:
+                  - /url: /shop/bill-books
+              - listitem [ref=f3e646]:
+                - link "Leaflets" [ref=f3e647] [cursor=pointer]:
+                  - /url: /shop/leaflets
+              - listitem [ref=f3e651]:
+                - link "Invitations" [ref=f3e652] [cursor=pointer]:
+                  - /url: /shop/invitations
+              - listitem [ref=f3e656]:
+                - link "Letterheads" [ref=f3e657] [cursor=pointer]:
+                  - /url: /shop/letterheads
+              - listitem [ref=f3e661]:
+                - link "Posters" [ref=f3e662] [cursor=pointer]:
+                  - /url: /shop/posters
+              - listitem [ref=f3e666]:
+                - link "Custom Quote" [ref=f3e667] [cursor=pointer]:
+                  - /url: /quote
+                - generic [ref=f3e668]: ·
+                - link "FAQ" [ref=f3e669] [cursor=pointer]:
+                  - /url: /faq
+                - generic [ref=f3e670]: ·
+                - link "Staff Portal" [ref=f3e671] [cursor=pointer]:
+                  - /url: /admin
+        - generic [ref=f3e672]:
+          - generic [ref=f3e673]: © 2026 Ai Printing Solutions. All Rights Reserved. 11/A Gangarama Rd, Werahara, Boralesgamuwa.
+          - generic [ref=f3e674]:
+            - generic [ref=f3e675]: "Secure Payments:"
+            - generic [ref=f3e679]: PAYHERE
+            - generic [ref=f3e680]: VISA / MASTERCARD
+            - generic [ref=f3e681]: BANK TRANSFER
+            - generic [ref=f3e682]: CASH ON DELIVERY
+    - link "Direct WhatsApp Chat with Ai Printing Solutions" [ref=f3e684] [cursor=pointer]:
+      - /url: https://wa.me/94773233533?text=Hi%20Ai%20Printing%2C%20I'd%20like%20to%20ask%20about%20your%20printing%20services%20and%20get%20a%20price%20estimate.
+      - generic [ref=f3e690]:
+        - generic [ref=f3e691]: Instant Quote & Support
+        - generic [ref=f3e692]: Chat on WhatsApp
