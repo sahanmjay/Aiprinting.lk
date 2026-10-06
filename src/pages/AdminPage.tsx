@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatLKR, formatItemPrice, getWhatsAppUrl } from '../lib/formatters';
-import { openStoredFile, uploadProductImage, deleteProductImage } from '../lib/supabase';
+import { openStoredFile, downloadStoredFile, uploadProductImage, deleteProductImage } from '../lib/supabase';
 import { tableOptionGroups } from '../data/priceTables';
 import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product } from '../types';
 
@@ -1006,13 +1006,22 @@ export const AdminPage: React.FC = () => {
                     </select>
                   </label>
                   {selectedOrder.bankSlipUrl && (
-                    <button
-                      onClick={() => openStoredFile('artwork-uploads', selectedOrder.bankSlipUrl!)}
-                      className="flex items-center gap-1 text-left text-[#D6342C] font-semibold hover:underline"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      View bank slip ({selectedOrder.bankSlipName || 'file'})
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => openStoredFile('artwork-uploads', selectedOrder.bankSlipUrl!)}
+                        className="flex items-center gap-1 text-left text-[#D6342C] font-semibold hover:underline"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        View bank slip ({selectedOrder.bankSlipName || 'file'})
+                      </button>
+                      <button
+                        onClick={() => downloadStoredFile('artwork-uploads', selectedOrder.bankSlipUrl!, selectedOrder.bankSlipName || 'bank-slip')}
+                        className="flex items-center gap-1 text-[#0F1B2D] font-semibold hover:underline"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Download
+                      </button>
+                    </div>
                   )}
                   {selectedOrder.specialInstructions && (
                     <div className="col-span-2"><strong>Instructions:</strong> {selectedOrder.specialInstructions}</div>
@@ -1036,16 +1045,29 @@ export const AdminPage: React.FC = () => {
                           <span className="font-bold text-[11px] text-slate-700 block">Uploaded Artwork Files:</span>
                           <div className="flex flex-wrap gap-2 mt-1">
                             {item.artworkFiles.map((art, fIdx) => (
-                              <button
-                                key={fIdx}
-                                disabled={!art.storagePath}
-                                onClick={() => art.storagePath && openStoredFile('artwork-uploads', art.storagePath)}
-                                title={art.storagePath ? 'Open file' : 'File was not uploaded'}
-                                className="px-2 py-1 bg-white border border-slate-300 rounded text-[10px] flex items-center gap-1 font-mono enabled:hover:border-[#0F1B2D] disabled:opacity-60"
-                              >
-                                <FileCheck className="w-3 h-3 text-emerald-600" />
-                                {art.fileName}
-                              </button>
+                              <div key={fIdx} className="flex items-stretch bg-white border border-slate-300 rounded text-[10px] overflow-hidden">
+                                <button
+                                  disabled={!art.storagePath}
+                                  onClick={() => art.storagePath && openStoredFile('artwork-uploads', art.storagePath)}
+                                  title={art.storagePath ? 'Open file in a new tab' : 'File was not uploaded'}
+                                  className="px-2 py-1 flex items-center gap-1 font-mono enabled:hover:bg-slate-50 disabled:opacity-60"
+                                >
+                                  <FileCheck className="w-3 h-3 text-emerald-600" />
+                                  <span className="font-sans font-semibold text-slate-500">{art.slot === 2 ? 'Back:' : 'Front:'}</span>
+                                  {art.fileName}
+                                </button>
+                                {art.storagePath && (
+                                  <button
+                                    onClick={() => downloadStoredFile('artwork-uploads', art.storagePath!, art.fileName)}
+                                    title="Download file"
+                                    aria-label={`Download ${art.fileName}`}
+                                    className="px-2 border-l border-slate-300 flex items-center gap-1 font-semibold text-[#0F1B2D] hover:bg-[#0F1B2D] hover:text-white transition-colors"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                    Download
+                                  </button>
+                                )}
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -1799,13 +1821,23 @@ export const AdminPage: React.FC = () => {
                       <div className="truncate" title={q.specifications}>{q.specifications}</div>
                       {q.deadline && <div className="text-[10px] text-slate-400">Needed by {q.deadline}</div>}
                       {q.attachmentUrl && (
-                        <button
-                          onClick={() => openStoredFile('quote-attachments', q.attachmentUrl!)}
-                          className="mt-1 flex items-center gap-1 text-[11px] text-[#D6342C] font-semibold hover:underline"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          {q.attachmentName || 'Attachment'}
-                        </button>
+                        <div className="mt-1 flex items-center gap-2 text-[11px]">
+                          <button
+                            onClick={() => openStoredFile('quote-attachments', q.attachmentUrl!)}
+                            className="flex items-center gap-1 text-[#D6342C] font-semibold hover:underline"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            {q.attachmentName || 'Attachment'}
+                          </button>
+                          <button
+                            onClick={() => downloadStoredFile('quote-attachments', q.attachmentUrl!, q.attachmentName || 'attachment')}
+                            title="Download file"
+                            aria-label={`Download ${q.attachmentName || 'attachment'}`}
+                            className="text-[#0F1B2D] hover:text-[#D6342C]"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       )}
                     </td>
                     <td className="p-3 space-y-1">

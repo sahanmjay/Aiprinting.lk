@@ -61,6 +61,16 @@ export async function deleteProductImage(url: string | undefined) {
   if (error) console.warn('Could not delete old product image', error);
 }
 
+// Admin only: saves a private file under its original name (signed URL sent as an attachment).
+export async function downloadStoredFile(bucket: FileBucket, path: string, fileName: string) {
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 600, { download: fileName });
+  if (error || !data) {
+    alert(`Could not download file: ${error?.message ?? 'unknown error'}`);
+    return;
+  }
+  window.location.href = data.signedUrl;
+}
+
 // Postgres columns are snake_case, app types are camelCase (top-level keys only; jsonb stays as-is).
 export const toRow = (obj: object) =>
   Object.fromEntries(
