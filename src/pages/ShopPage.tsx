@@ -17,6 +17,7 @@ export const ShopPage: React.FC = () => {
 
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
+      if (!p.isActive) return false;
       // Category filter
       if (categorySlug && currentCategory) {
         if (p.categoryId !== currentCategory.id) return false;
@@ -94,7 +95,7 @@ export const ShopPage: React.FC = () => {
               </li>
 
               {categories.map((cat) => {
-                const count = products.filter((p) => p.categoryId === cat.id).length;
+                const count = products.filter((p) => p.isActive && p.categoryId === cat.id).length;
                 const isSelected = categorySlug === cat.slug;
                 return (
                   <li key={cat.id} className="shrink-0">

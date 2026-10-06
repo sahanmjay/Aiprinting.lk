@@ -25,7 +25,7 @@ import { HeroBackdrop, HeroProductSlider, useHeroSlider, useHeroSlides } from '.
 export const HomePage: React.FC = () => {
   const { categories, products, siteSettings, getFromPrice } = useStore();
 
-  const featuredProducts = products.filter((p) => p.isFeatured || p.isHot).slice(0, 4);
+  const featuredProducts = products.filter((p) => p.isActive && (p.isFeatured || p.isHot)).slice(0, 4);
   const heroSlides = useHeroSlides();
   const { index: heroIndex, go: goHero, setPaused: pauseHero } = useHeroSlider(heroSlides.length);
 

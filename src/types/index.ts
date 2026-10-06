@@ -111,7 +111,7 @@ export interface CartItem {
 }
 
 export type OrderStatus = 'new' | 'confirmed' | 'in_production' | 'ready' | 'delivered' | 'cancelled';
-export type PaymentMethod = 'payhere' | 'bank_transfer' | 'cod';
+export type PaymentMethod = 'payhere' | 'bank_transfer';
 export type PaymentStatus = 'pending' | 'paid' | 'verification_needed' | 'failed';
 
 export interface Customer {

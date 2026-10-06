@@ -151,9 +151,6 @@ export const Footer: React.FC = () => {
             <span className="px-2 py-0.5 rounded bg-[#182A45] text-slate-200 text-[10px] font-semibold tracking-wider">
               BANK TRANSFER
             </span>
-            <span className="px-2 py-0.5 rounded bg-[#182A45] text-slate-200 text-[10px] font-semibold tracking-wider">
-              CASH ON DELIVERY
-            </span>
           </div>
         </div>
       </div>

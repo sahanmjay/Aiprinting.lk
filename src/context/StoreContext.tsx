@@ -90,7 +90,7 @@ interface StoreContextType {
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 // Bump when SEED_PRODUCTS changes so browsers drop their stale saved copy.
-const PRODUCTS_KEY = 'aiprint_products_v4';
+const PRODUCTS_KEY = 'aiprint_products_v5';
 
 // Corrupt or missing localStorage must never blank the whole site.
 function load<T>(key: string, fallback: () => T): T {

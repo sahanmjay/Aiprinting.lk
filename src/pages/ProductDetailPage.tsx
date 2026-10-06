@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   ShieldCheck,
   Truck,
@@ -23,9 +23,17 @@ import { UploadedArtwork, CartItem, Product } from '../types';
 import { RegistrationMark } from '../components/common/RegistrationMark';
 import { useQuotationPrint, QuotationData, QuotationLine } from '../components/common/QuotationDocument';
 
+// Visiting cards are one product with a sides choice; each side count keeps its own price table.
+const SIDE_VARIANTS = { single: 'prod-vc-single', double: 'prod-vc-double' } as const;
+type Sides = keyof typeof SIDE_VARIANTS;
+// Choices carried over when switching sides (the page remounts on every new URL)
+type CarriedChoices = { paperId: string; qtyId: string; artworkType: 'own' | 'design'; artworkFiles: UploadedArtwork[]; notes: string };
+const SIDES_LABEL: Record<Sides, string> = { single: 'Single sided (front only)', double: 'Double sided (front & back)' };
+
 export const ProductDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const carried = useLocation().state as CarriedChoices | null;
   const { products, categories, priceMatrix, getPriceForOptions, getFromPrice, addToCart, siteSettings } = useStore();
 
   const product = useMemo(() => {
@@ -40,20 +48,20 @@ export const ProductDetailPage: React.FC = () => {
   // Option Group 1: typically Paper Stock
   const paperGroup = product.optionGroups?.[0];
   const [selectedPaperId, setSelectedPaperId] = useState<string>(
-    paperGroup?.values[0]?.id || ''
+    carried?.paperId || paperGroup?.values[0]?.id || ''
   );
 
   // Option Group 2: typically Quantity
   const qtyGroup = product.optionGroups?.[1];
   const [selectedQtyId, setSelectedQtyId] = useState<string>(
-    qtyGroup?.values[0]?.id || ''
+    carried?.qtyId || qtyGroup?.values[0]?.id || ''
   );
 
   // Artwork selection
-  const [artworkType, setArtworkType] = useState<'own' | 'design'>('own');
-  const [artworkFiles, setArtworkFiles] = useState<UploadedArtwork[]>([]);
+  const [artworkType, setArtworkType] = useState<'own' | 'design'>(carried?.artworkType ?? 'own');
+  const [artworkFiles, setArtworkFiles] = useState<UploadedArtwork[]>(carried?.artworkFiles ?? []);
   const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [specialInstructions, setSpecialInstructions] = useState('');
+  const [specialInstructions, setSpecialInstructions] = useState(carried?.notes ?? '');
 
   // Active Tab below the fold
   const [activeTab, setActiveTab] = useState<'description' | 'specs' | 'delivery'>('description');
@@ -121,9 +129,29 @@ export const ProductDetailPage: React.FC = () => {
     setArtworkFiles((prev) => prev.filter((f) => f.slot !== slot));
   };
 
+  const sides: Sides | null =
+    product.id === SIDE_VARIANTS.single ? 'single' : product.id === SIDE_VARIANTS.double ? 'double' : null;
+  const sidesMain = sides && products.find((p) => p.id === SIDE_VARIANTS.double);
+  const title = sidesMain?.name ?? product.name;
+  const step = (n: number) => n + (sides ? 1 : 0);
+  const switchSides = (to: Sides) => {
+    const target = products.find((p) => p.id === SIDE_VARIANTS[to]);
+    if (!target || to === sides) return;
+    const state: CarriedChoices = {
+      paperId,
+      qtyId,
+      artworkType,
+      // single sided cards have no back artwork
+      artworkFiles: to === 'single' ? artworkFiles.filter((f) => f.slot === 1) : artworkFiles,
+      notes: specialInstructions,
+    };
+    navigate(`/product/${target.slug}`, { replace: true, state });
+  };
+
   // Add to Cart
   const handleAddToCart = () => {
     const selectedOptionsList = [];
+    if (sides) selectedOptionsList.push({ groupName: 'Printing', valueLabel: SIDES_LABEL[sides], valueId: sides });
     if (paperGroup && selectedPaper) {
       selectedOptionsList.push({
         groupName: paperGroup.name,
@@ -174,6 +202,7 @@ export const ProductDetailPage: React.FC = () => {
 
   const handleDownloadQuote = () => {
     const details: string[] = [];
+    if (sides) details.push(`Printing: ${SIDES_LABEL[sides]}`);
     if (paperGroup && selectedPaper) details.push(`${paperGroup.name}: ${selectedPaper.label}`);
     if (product.sizeNote) details.push(product.sizeNote);
     details.push(artworkType === 'design' ? 'Artwork: designed by Ai Printing' : 'Artwork: supplied by customer (print-ready)');
@@ -206,6 +235,7 @@ export const ProductDetailPage: React.FC = () => {
   // Build WhatsApp pre-filled configuration message
   const whatsappMessage = useMemo(() => {
     let msg = `Hi Ai Printing Solutions! I'd like ${isPriced ? 'to order' : 'a price for'}:\n\n*Product:* ${product.name}\n`;
+    if (sides) msg += `*Printing:* ${SIDES_LABEL[sides]}\n`;
     if (paperGroup && selectedPaper) msg += `*${paperGroup.name}:* ${selectedPaper.label}\n`;
     if (qtyGroup && selectedQty) msg += `*${qtyGroup.name}:* ${selectedQty.label}\n`;
     msg += `*Artwork Option:* ${artworkType === 'design' ? 'Design it for me (+Rs. 500)' : 'I have artwork'}\n`;
@@ -213,11 +243,11 @@ export const ProductDetailPage: React.FC = () => {
     if (specialInstructions) msg += `*Notes:* ${specialInstructions}\n`;
     msg += `\nPlease confirm production turnaround. Thank you!`;
     return msg;
-  }, [product, paperGroup, qtyGroup, selectedPaper, selectedQty, artworkType, totalPrice, specialInstructions, isPriced]);
+  }, [product, sides, paperGroup, qtyGroup, selectedPaper, selectedQty, artworkType, totalPrice, specialInstructions, isPriced]);
 
   // Related products
   const relatedProducts = products
-    .filter((p) => p.categoryId === product.categoryId && p.id !== product.id)
+    .filter((p) => p.isActive && p.categoryId === product.categoryId && p.id !== product.id && p.id !== sidesMain?.id)
     .slice(0, 3);
 
   return (
@@ -267,7 +297,7 @@ export const ProductDetailPage: React.FC = () => {
         </Link>
         <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
         <span className="text-[#0F1B2D] font-semibold truncate max-w-[200px] sm:max-w-none">
-          {product.name}
+          {title}
         </span>
       </nav>
 
@@ -339,7 +369,7 @@ export const ProductDetailPage: React.FC = () => {
               {product.categoryName}
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-[#0F1B2D] tracking-tight leading-tight">
-              {product.name}
+              {title}
             </h1>
             <p className="text-xs sm:text-sm text-slate-600">
               {product.shortDescription}
@@ -388,12 +418,39 @@ export const ProductDetailPage: React.FC = () => {
 
           {/* CONFIGURATOR CONTROLS */}
           <div className="space-y-4">
+            {sides && (
+              <div className="space-y-1.5">
+                <span className="block text-xs font-bold text-[#0F1B2D]">1. Printing Sides:</span>
+                <div role="radiogroup" aria-label="Printing sides" className="grid grid-cols-2 gap-2">
+                  {(Object.keys(SIDE_VARIANTS) as Sides[]).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      role="radio"
+                      aria-checked={sides === s}
+                      onClick={() => switchSides(s)}
+                      className={`p-3 rounded border text-xs text-left transition-all ${
+                        sides === s
+                          ? 'border-[#0F1B2D] bg-[#0F1B2D]/5 font-semibold text-[#0F1B2D] ring-1 ring-[#0F1B2D]'
+                          : 'border-[#E6E0D6] text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="block font-bold">{s === 'single' ? 'Single Sided' : 'Double Sided'}</span>
+                      <span className="block text-[11px] text-slate-500 font-normal">
+                        {s === 'single' ? 'Print on the front only' : 'Print on front and back'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Paper Stock Dropdown */}
             {paperGroup && (
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center text-xs">
                   <label htmlFor="paper-stock-select" className="font-bold text-[#0F1B2D]">
-                    1. Select {paperGroup.name}:
+                    {step(1)}. Select {paperGroup.name}:
                   </label>
                   {selectedPaper?.finishType && (
                     <span className="text-[11px] font-medium text-slate-500">
@@ -420,7 +477,7 @@ export const ProductDetailPage: React.FC = () => {
             {qtyGroup && (
               <div className="space-y-1.5">
                 <label htmlFor="quantity-select" className="block text-xs font-bold text-[#0F1B2D]">
-                  2. Select {qtyGroup.name}:
+                  {step(2)}. Select {qtyGroup.name}:
                 </label>
                 <select
                   id="quantity-select"
@@ -440,7 +497,7 @@ export const ProductDetailPage: React.FC = () => {
             {/* Artwork Radio Selection */}
             <div className="space-y-2 pt-1">
               <span className="block text-xs font-bold text-[#0F1B2D]">
-                3. Artwork Preparation:
+                {step(3)}. Artwork Preparation:
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <label
@@ -490,14 +547,14 @@ export const ProductDetailPage: React.FC = () => {
               <div className="space-y-2 pt-2">
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-bold text-[#0F1B2D]">
-                    Upload Artwork Files (Front / Back):
+                    {sides === 'single' ? 'Upload Artwork File (Front):' : 'Upload Artwork Files (Front / Back):'}
                   </span>
                   <span className="text-[11px] text-slate-500">
                     PDF, AI, PSD, CDR, TIFF, PNG, JPG
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className={`grid grid-cols-1 gap-3 ${sides === 'single' ? '' : 'sm:grid-cols-2'}`}>
                   {/* Slot 1: Front Artwork */}
                   <div className="border-2 border-dashed border-[#E6E0D6] hover:border-[#0F1B2D] rounded p-3 text-center bg-[#FAF8F5] transition-colors relative">
                     {artworkFiles.find((f) => f.slot === 1) ? (
@@ -541,6 +598,7 @@ export const ProductDetailPage: React.FC = () => {
                   </div>
 
                   {/* Slot 2: Back Artwork */}
+                  {sides !== 'single' && (
                   <div className="border-2 border-dashed border-[#E6E0D6] hover:border-[#0F1B2D] rounded p-3 text-center bg-[#FAF8F5] transition-colors relative">
                     {artworkFiles.find((f) => f.slot === 2) ? (
                       <div className="space-y-1 text-left">
@@ -570,7 +628,7 @@ export const ProductDetailPage: React.FC = () => {
                           Back Artwork (Slot 2)
                         </span>
                         <span className="block text-[10px] text-slate-500">
-                          Optional for single-side
+                          {sides === 'double' ? 'Back of the card' : 'Optional for single-side'}
                         </span>
                         <input
                           type="file"
@@ -581,6 +639,7 @@ export const ProductDetailPage: React.FC = () => {
                       </label>
                     )}
                   </div>
+                  )}
                 </div>
 
                 {isUploading && (
@@ -797,7 +856,7 @@ export const ProductDetailPage: React.FC = () => {
                 <strong>Island-Wide Doorstep Delivery:</strong> We partner with premier courier networks covering all 25 districts of Sri Lanka. Flat fee of <strong>{formatLKR(siteSettings.deliveryFee)}</strong> is added to your cart.
               </p>
               <p>
-                <strong>Payment Methods:</strong> Pay securely online via PayHere (Credit/Debit Card), Bank Transfer directly to our Commercial Bank account with receipt upload, or Cash on Delivery.
+                <strong>Payment Methods:</strong> Pay securely online via PayHere (Credit/Debit Card) or Bank Transfer directly to our Commercial Bank account with receipt upload.
               </p>
             </div>
           )}

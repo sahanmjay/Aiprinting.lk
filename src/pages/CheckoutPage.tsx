@@ -5,7 +5,6 @@ import {
   Truck,
   CreditCard,
   Building2,
-  Banknote,
   UploadCloud,
   FileCheck,
   X,
@@ -32,7 +31,7 @@ export const CheckoutPage: React.FC = () => {
   const [specialInstructions, setSpecialInstructions] = useState('');
   // Items without a price yet are confirmed by staff first, so they can't be paid by card now
   const hasPriceToConfirm = cart.some((i) => i.priceToConfirm);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(hasPriceToConfirm ? 'cod' : 'payhere');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(hasPriceToConfirm ? 'bank_transfer' : 'payhere');
 
   // Bank Transfer slip upload state
   const [bankSlipName, setBankSlipName] = useState<string>('');
@@ -322,7 +321,8 @@ export const CheckoutPage: React.FC = () => {
               {hasPriceToConfirm && (
                 <p className="p-3 text-xs bg-amber-50 border border-amber-300 text-amber-900 rounded">
                   Some items are <strong>price to be confirmed</strong>. We&apos;ll contact you with the final total
-                  before printing, so online card payment isn&apos;t available for this order.
+                  before printing, so online card payment isn&apos;t available for this order. Please pay by bank
+                  transfer once we confirm the total.
                 </p>
               )}
 
@@ -436,34 +436,6 @@ export const CheckoutPage: React.FC = () => {
                     </div>
                   </div>
                 )}
-              </label>
-
-              {/* COD Option */}
-              <label
-                className={`p-4 rounded border block cursor-pointer transition-all ${
-                  paymentMethod === 'cod'
-                    ? 'border-[#0F1B2D] bg-[#0F1B2D]/5 font-semibold text-[#0F1B2D]'
-                    : 'border-[#E6E0D6] hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <input
-                    type="radio"
-                    name="paymentMethod"
-                    checked={paymentMethod === 'cod'}
-                    onChange={() => setPaymentMethod('cod')}
-                    className="mt-1 accent-[#0F1B2D]"
-                  />
-                  <div>
-                    <div className="text-xs font-bold flex items-center gap-1.5">
-                      <Banknote className="w-4 h-4 text-emerald-600" />
-                      <span>Cash on Delivery (COD)</span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Pay cash to courier upon package inspection at your delivery address.
-                    </p>
-                  </div>
-                </div>
               </label>
             </div>
           </div>

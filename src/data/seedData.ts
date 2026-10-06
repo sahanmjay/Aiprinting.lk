@@ -182,6 +182,7 @@ function makeProduct(p: {
   sortOrder: number;
   isFeatured?: boolean;
   isHot?: boolean;
+  isActive?: boolean;
   specs?: Record<string, string>;
 }): Product {
   const table = PRICE_TABLES[p.id];
@@ -200,7 +201,7 @@ function makeProduct(p: {
     isHot: !!p.isHot,
     deliveryNote: p.deliveryNote,
     sizeNote: p.sizeNote,
-    isActive: true,
+    isActive: p.isActive ?? true,
     sortOrder: p.sortOrder,
     createdAt: CREATED_AT,
     images: p.images.map((imageUrl, i) => ({
@@ -224,9 +225,9 @@ export const SEED_PRODUCTS: Product[] = [
   makeProduct({
     id: 'prod-vc-double',
     slug: 'double-sided-visiting-cards',
-    name: 'Double Sided Visiting Cards',
+    name: 'Visiting Cards',
     categoryId: 'cat-visiting-cards',
-    shortDescription: 'Full colour on both sides, on 8 premium boards from gloss art board to metallic and textured laid.',
+    shortDescription: 'Single or double sided, full colour on 8 premium boards from gloss art board to metallic and textured laid.',
     longDescription: `Use the back of your card for your services, a map or a second language — putting details on both sides keeps everything easy to read. Printed full colour on both sides on your choice of eight premium boards. Custom sizes, foiling, embossing and other special finishes on request — ${CALL}.`,
     deliveryNote: 'Island-wide delivery within 1–2 days, Rs. 400 extra.',
     sizeNote: 'Card sizes 90 × 50 mm or 90 × 55 mm. Curved-corner size 86 × 54 mm. Custom sizes, foiling and embossing on request.',
@@ -258,6 +259,8 @@ export const SEED_PRODUCTS: Product[] = [
     sortOrder: 2,
     isFeatured: true,
     isHot: true,
+    // Not listed on its own: it is the "Single sided" choice on the Visiting Cards page
+    isActive: false,
     specs: {
       'Card Sizes': '90 × 50 mm or 90 × 55 mm',
       'Printing': 'Full colour, front only',
@@ -598,7 +601,7 @@ export const SEED_FAQS: FAQItem[] = [
     id: 'faq-9',
     category: 'Pricing',
     question: 'What payment methods do you accept?',
-    answer: 'We accept online payments via PayHere (Visa, Mastercard, Frimi, Genie, and internet banking), direct Bank Transfer to our Commercial Bank account with receipt upload, and Cash on Delivery (COD) for eligible orders.',
+    answer: 'We accept online payments via PayHere (Visa, Mastercard, Frimi, Genie, and internet banking) and direct Bank Transfer to our Commercial Bank account with receipt upload.',
   },
   {
     id: 'faq-10',
