@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatLKR, formatItemPrice, getWhatsAppUrl } from '../lib/formatters';
-import { openStoredFile } from '../lib/supabase';
+import { openStoredFile, uploadProductImage, deleteProductImage } from '../lib/supabase';
 import { tableOptionGroups } from '../data/priceTables';
 import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product } from '../types';
 
@@ -138,6 +138,34 @@ export const AdminPage: React.FC = () => {
     isVariable: true,
   });
 
+  // Photos uploaded while the editor is open; the ones not kept are removed again to save Storage space
+  const pendingUploads = useRef<string[]>([]);
+  const [imageUploading, setImageUploading] = useState(false);
+  const imageInUse = (url: string, exceptProductId?: string) =>
+    products.some((p) => p.id !== exceptProductId && p.images.some((i) => i.imageUrl === url));
+
+  const handleUploadProductImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setImageUploading(true);
+    try {
+      const url = await uploadProductImage(file);
+      pendingUploads.current.push(url);
+      setProductForm((f) => ({ ...f, imageUrl: url }));
+    } catch (err) {
+      alert(`Upload failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  const closeProductModal = (keptUrl?: string) => {
+    pendingUploads.current.filter((u) => u !== keptUrl).forEach((u) => deleteProductImage(u));
+    pendingUploads.current = [];
+    setIsProductModalOpen(false);
+  };
+
   const handleOpenAddProduct = () => {
     setEditingProduct(null);
     setProductForm({
@@ -221,6 +249,8 @@ export const AdminPage: React.FC = () => {
         ],
       };
       updateProduct(updated);
+      const oldUrl = editingProduct.images[0]?.imageUrl;
+      if (oldUrl && oldUrl !== productForm.imageUrl && !imageInUse(oldUrl, editingProduct.id)) deleteProductImage(oldUrl);
     } else {
       addProduct({
         name: productForm.name,
@@ -258,12 +288,14 @@ export const AdminPage: React.FC = () => {
         }),
       });
     }
-    setIsProductModalOpen(false);
+    closeProductModal(productForm.imageUrl);
   };
 
   const handleDeleteProduct = (productId: string, name: string) => {
     if (confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
+      const urls = products.find((p) => p.id === productId)?.images.map((i) => i.imageUrl) ?? [];
       deleteProduct(productId);
+      urls.filter((u) => !imageInUse(u, productId)).forEach((u) => deleteProductImage(u));
     }
   };
 
@@ -1456,7 +1488,7 @@ export const AdminPage: React.FC = () => {
                     </h3>
                   </div>
                   <button
-                    onClick={() => setIsProductModalOpen(false)}
+                    onClick={() => closeProductModal()}
                     className="p-1 text-slate-400 hover:text-slate-700 font-bold text-lg"
                   >
                     ✕
@@ -1543,8 +1575,17 @@ export const AdminPage: React.FC = () => {
 
                   {/* Image URL & Preset Pickers */}
                   <div className="space-y-1.5 pt-1">
-                    <label className="font-bold text-slate-700">Primary Image URL</label>
+                    <label className="font-bold text-slate-700">Product Photo</label>
                     <div className="flex gap-2">
+                      <label
+                        className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-2.5 rounded text-xs font-bold text-white cursor-pointer transition-colors ${
+                          imageUploading ? 'bg-slate-400 pointer-events-none' : 'bg-[#0F1B2D] hover:bg-[#182A45]'
+                        }`}
+                      >
+                        {imageUploading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                        {imageUploading ? 'Uploading…' : 'Upload photo'}
+                        <input type="file" accept="image/*" className="sr-only" onChange={handleUploadProductImage} disabled={imageUploading} />
+                      </label>
                       <input
                         type="text"
                         placeholder="/images/products/... or https://..."
@@ -1562,6 +1603,9 @@ export const AdminPage: React.FC = () => {
                         </div>
                       )}
                     </div>
+                    <p className="text-[10px] text-slate-400">
+                      Photos are shrunk to 1200px before upload (usually under 300 KB each) and the old uploaded photo is deleted when you save, so Supabase storage stays small.
+                    </p>
                     {/* Real photo presets (files in public/images/products) */}
                     <div className="flex flex-wrap gap-1.5 pt-1">
                       <span className="text-[10px] text-slate-400">Our photos:</span>
@@ -1698,14 +1742,15 @@ export const AdminPage: React.FC = () => {
                   <div className="flex justify-end gap-3 pt-4 border-t border-[#E6E0D6]">
                     <button
                       type="button"
-                      onClick={() => setIsProductModalOpen(false)}
+                      onClick={() => closeProductModal()}
                       className="px-4 py-2.5 border border-slate-300 text-slate-700 font-semibold rounded hover:bg-slate-50 transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="px-6 py-2.5 bg-[#D6342C] hover:bg-[#B8251E] text-white font-bold rounded flex items-center gap-2 shadow-sm transition-colors"
+                      disabled={imageUploading}
+                      className="px-6 py-2.5 bg-[#D6342C] hover:bg-[#B8251E] disabled:opacity-50 text-white font-bold rounded flex items-center gap-2 shadow-sm transition-colors"
                     >
                       <Save className="w-4 h-4" />
                       <span>{editingProduct ? 'Save Changes' : 'Create Product'}</span>
