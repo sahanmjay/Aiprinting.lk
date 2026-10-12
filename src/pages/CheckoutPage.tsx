@@ -36,6 +36,7 @@ export const CheckoutPage: React.FC = () => {
   // Bank Transfer slip upload state
   const [bankSlipName, setBankSlipName] = useState<string>('');
   const [bankSlipUrl, setBankSlipUrl] = useState<string>('');
+  const [accountCopied, setAccountCopied] = useState(false);
 
   // Validation state
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -393,11 +394,38 @@ export const CheckoutPage: React.FC = () => {
                     <div className="font-bold text-[#0F1B2D] text-xs">
                       Official Bank Account Details:
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-700">
-                      <div><strong>Bank:</strong> {siteSettings.bankDetails.bankName}</div>
-                      <div><strong>Branch:</strong> {siteSettings.bankDetails.branch}</div>
-                      <div><strong>Account Name:</strong> {siteSettings.bankDetails.accountName}</div>
-                      <div><strong>Account Number:</strong> {siteSettings.bankDetails.accountNumber}</div>
+                    <div className="rounded-lg border border-[#E6E0D6] bg-[#FAF8F5] p-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                      {siteSettings.bankDetails.logoUrl && (
+                        <img
+                          src={siteSettings.bankDetails.logoUrl}
+                          alt={siteSettings.bankDetails.bankName}
+                          className="h-10 w-auto max-w-[160px] object-contain shrink-0 self-start sm:self-center"
+                        />
+                      )}
+                      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px] text-slate-700 min-w-0">
+                        <dt className="text-slate-500">Bank</dt>
+                        <dd className="font-semibold text-[#0F1B2D]">{siteSettings.bankDetails.bankName}</dd>
+                        <dt className="text-slate-500">Branch</dt>
+                        <dd className="font-semibold text-[#0F1B2D]">{siteSettings.bankDetails.branch}</dd>
+                        <dt className="text-slate-500">Account name</dt>
+                        <dd className="font-semibold text-[#0F1B2D]">{siteSettings.bankDetails.accountName}</dd>
+                        <dt className="text-slate-500">Account no.</dt>
+                        <dd className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-sm text-[#0F1B2D] tracking-wide">{siteSettings.bankDetails.accountNumber}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault(); // inside the payment <label>
+                              navigator.clipboard?.writeText(siteSettings.bankDetails.accountNumber.replace(/\s+/g, ''));
+                              setAccountCopied(true);
+                              setTimeout(() => setAccountCopied(false), 2000);
+                            }}
+                            className="px-1.5 py-0.5 rounded border border-[#E6E0D6] bg-white text-[10px] font-semibold text-slate-600 hover:border-[#0F1B2D]"
+                          >
+                            {accountCopied ? 'Copied ✓' : 'Copy'}
+                          </button>
+                        </dd>
+                      </dl>
                     </div>
 
                     <div className="pt-2 border-t border-slate-100 space-y-2">

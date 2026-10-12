@@ -22,13 +22,10 @@ import { formatLKR, getWhatsAppUrl, formatFileSize, generateQuoteNumber } from '
 import { UploadedArtwork, CartItem, Product } from '../types';
 import { RegistrationMark } from '../components/common/RegistrationMark';
 import { useQuotationPrint, QuotationData, QuotationLine } from '../components/common/QuotationDocument';
+import { sidesOf, SIDES_LABEL, Sides } from '../data/printSides';
 
-// Visiting cards are one product with a sides choice; each side count keeps its own price table.
-const SIDE_VARIANTS = { single: 'prod-vc-single', double: 'prod-vc-double' } as const;
-type Sides = keyof typeof SIDE_VARIANTS;
 // Choices carried over when switching sides (the page remounts on every new URL)
 type CarriedChoices = { paperId: string; qtyId: string; artworkType: 'own' | 'design'; artworkFiles: UploadedArtwork[]; notes: string };
-const SIDES_LABEL: Record<Sides, string> = { single: 'Single sided (front only)', double: 'Double sided (front & back)' };
 
 export const ProductDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -129,19 +126,18 @@ export const ProductDetailPage: React.FC = () => {
     setArtworkFiles((prev) => prev.filter((f) => f.slot !== slot));
   };
 
-  const sides: Sides | null =
-    product.id === SIDE_VARIANTS.single ? 'single' : product.id === SIDE_VARIANTS.double ? 'double' : null;
-  const sidesMain = sides && products.find((p) => p.id === SIDE_VARIANTS.double);
-  const title = sidesMain?.name ?? product.name;
-  const step = (n: number) => n + (sides ? 1 : 0);
+  const { side: sides, pair } = sidesOf(product.id);
+  const listed = pair && products.find((p) => p.id === pair[pair.listed]);
+  const title = listed?.name ?? product.name;
+  const step = (n: number) => n + (pair ? 1 : 0);
   const switchSides = (to: Sides) => {
-    const target = products.find((p) => p.id === SIDE_VARIANTS[to]);
+    const target = pair && products.find((p) => p.id === pair[to]);
     if (!target || to === sides) return;
     const state: CarriedChoices = {
       paperId,
       qtyId,
       artworkType,
-      // single sided cards have no back artwork
+      // single side prints have no back artwork
       artworkFiles: to === 'single' ? artworkFiles.filter((f) => f.slot === 1) : artworkFiles,
       notes: specialInstructions,
     };
@@ -247,7 +243,7 @@ export const ProductDetailPage: React.FC = () => {
 
   // Related products
   const relatedProducts = products
-    .filter((p) => p.isActive && p.categoryId === product.categoryId && p.id !== product.id && p.id !== sidesMain?.id)
+    .filter((p) => p.isActive && p.categoryId === product.categoryId && p.id !== product.id && p.id !== pair?.single && p.id !== pair?.double)
     .slice(0, 3);
 
   return (
@@ -418,11 +414,11 @@ export const ProductDetailPage: React.FC = () => {
 
           {/* CONFIGURATOR CONTROLS */}
           <div className="space-y-4">
-            {sides && (
+            {pair && (
               <div className="space-y-1.5">
                 <span className="block text-xs font-bold text-[#0F1B2D]">1. Printing Sides:</span>
                 <div role="radiogroup" aria-label="Printing sides" className="grid grid-cols-2 gap-2">
-                  {(Object.keys(SIDE_VARIANTS) as Sides[]).map((s) => (
+                  {(['single', 'double'] as Sides[]).map((s) => (
                     <button
                       key={s}
                       type="button"
@@ -435,9 +431,9 @@ export const ProductDetailPage: React.FC = () => {
                           : 'border-[#E6E0D6] text-slate-700 hover:bg-slate-50'
                       }`}
                     >
-                      <span className="block font-bold">{s === 'single' ? 'Single Sided' : 'Double Sided'}</span>
+                      <span className="block font-bold">{s === 'single' ? 'Single Side' : 'Double Side'}</span>
                       <span className="block text-[11px] text-slate-500 font-normal">
-                        {s === 'single' ? 'Print on the front only' : 'Print on front and back'}
+                        {pair.labels?.[s] ?? (s === 'single' ? 'Print on the front only' : 'Print on front and back')}
                       </span>
                     </button>
                   ))}
@@ -548,6 +544,9 @@ export const ProductDetailPage: React.FC = () => {
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-bold text-[#0F1B2D]">
                     {sides === 'single' ? 'Upload Artwork File (Front):' : 'Upload Artwork Files (Front / Back):'}
+                    {sides === 'single' && !pair && (
+                      <span className="block font-normal text-[11px] text-slate-500">This product is printed on one side only.</span>
+                    )}
                   </span>
                   <span className="text-[11px] text-slate-500">
                     PDF, AI, PSD, CDR, TIFF, PNG, JPG
@@ -628,7 +627,7 @@ export const ProductDetailPage: React.FC = () => {
                           Back Artwork (Slot 2)
                         </span>
                         <span className="block text-[10px] text-slate-500">
-                          {sides === 'double' ? 'Back of the card' : 'Optional for single-side'}
+                          {sides === 'double' ? 'Back side artwork' : 'Optional — leave empty for one side'}
                         </span>
                         <input
                           type="file"

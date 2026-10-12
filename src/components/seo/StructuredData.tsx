@@ -26,7 +26,7 @@ export const StructuredData: React.FC = () => {
     geo: {
       '@type': 'GeoCoordinates',
       latitude: 6.81929,
-      longitude: 79.89832,
+      longitude: 79.90051,
     },
     openingHoursSpecification: [
       {

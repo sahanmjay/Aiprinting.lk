@@ -63,6 +63,17 @@
       <div class="word"><span style="animation-delay:0.100s">A</span><span style="animation-delay:0.205s">I</span><span style="animation-delay:0.310s">&nbsp;</span><span style="animation-delay:0.415s">P</span><span style="animation-delay:0.520s">R</span><span style="animation-delay:0.625s">I</span><span style="animation-delay:0.730s">N</span><span style="animation-delay:0.835s">T</span><span style="animation-delay:0.940s">I</span><span style="animation-delay:1.045s">N</span><span style="animation-delay:1.150s">G</span><div class="lines" aria-hidden="true"><div class="glow"></div></div></div>
     </div>
     <div id="root"></div>
+    <script>
+      // main.tsx removes the splash once the app starts. If the app never starts (a script failed to
+      // load, e.g. a flaky connection or a cached old version), offer a reload instead of loading forever.
+      setTimeout(function () {
+        var s = document.getElementById('splash');
+        if (!s || s.classList.contains('splash-hide')) return;
+        s.insertAdjacentHTML('beforeend',
+          '<div style="position:absolute;bottom:22%;left:0;right:0;text-align:center;font:14px system-ui,sans-serif;color:#5B6575">' +
+          'Taking longer than usual.<br><button onclick="location.reload()" style="margin-top:12px;padding:10px 22px;border:0;border-radius:6px;background:#0F1B2D;color:#fff;font-weight:600;cursor:pointer">Reload</button></div>');
+      }, 12000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

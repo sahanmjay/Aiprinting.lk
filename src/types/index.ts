@@ -207,6 +207,14 @@ export interface ClientLogo {
   isActive: boolean;
 }
 
+export interface SocialLinks {
+  facebook: string;
+  instagram: string;
+  youtube: string;
+  tiktok: string;
+  linkedin: string;
+}
+
 export interface SiteSettings {
   siteName: string;
   tagline: string;
@@ -226,7 +234,12 @@ export interface SiteSettings {
     branch: string;
     accountName: string;
     accountNumber: string;
+    logoUrl: string; // shown on the checkout bank-transfer box
   };
+  socialLinks: SocialLinks; // empty = icon shown without a link
+  elfsightReviewsId: string; // Elfsight Google Reviews widget id; empty hides the reviews section
+  clientLogos: ClientLogo[];
+  heroBackgrounds: Record<string, string>; // hero slide productId -> uploaded background (else the built-in photo)
   gtmId: string;
   metaPixelId: string;
 }

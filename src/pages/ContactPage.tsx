@@ -84,7 +84,15 @@ export const ContactPage: React.FC = () => {
                 <div>
                   <div className="font-bold text-[#0F1B2D]">Factory Location</div>
                   <div className="text-slate-600">{siteSettings.address}</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">GPS Coords: 6.81929, 79.89832</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">GPS Coords: 6.81929, 79.90051</div>
+                  <a
+                    href="https://goo.gl/maps/4tWJppQUvEfFPVLz6"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block mt-1 text-[11px] font-semibold text-[#D6342C] hover:underline"
+                  >
+                    Get directions on Google Maps →
+                  </a>
                 </div>
               </li>
 
@@ -140,7 +148,7 @@ export const ContactPage: React.FC = () => {
           <div className="bg-white p-2 rounded-lg border border-[#E6E0D6] overflow-hidden shadow-xs h-64">
             <iframe
               title="Google Map Boralesgamuwa"
-              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3961.3787727092923!2d79.89613131535787!3d6.819289995071373!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ae25a557b77bebd%3A0xb35a0fbf021481db!2s11%2FA%20Gangarama%20Rd%2C%20Boralesgamuwa!5e0!3m2!1sen!2slk!4v1689000000000!5m2!1sen!2slk"
+              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1980.69!2d79.900509!3d6.8192929!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ae25ab43aa6afef%3A0x2984fe2e1cb28f92!2sAi%20Printing%20Solutions!5e0!3m2!1sen!2slk!4v1700000000000!5m2!1sen!2slk"
               width="100%"
               height="100%"
               style={{ border: 0 }}

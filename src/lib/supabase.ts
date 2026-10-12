@@ -29,36 +29,54 @@ export async function openStoredFile(bucket: FileBucket, path: string) {
   if (win) win.location.href = data.signedUrl;
 }
 
-const PRODUCT_BUCKET = 'product-images';
-const PRODUCT_URL_MARK = `/storage/v1/object/public/${PRODUCT_BUCKET}/`;
+export type ImageBucket = 'product-images' | 'site-assets';
+const PUBLIC_URL = /\/storage\/v1\/object\/public\/(product-images|site-assets)\/(.+)$/;
 
-// Admin only: shrinks the photo in the browser (max 1200px, WebP ~80%) so each image is usually
-// under 300 KB in Storage instead of a multi-MB camera file, then returns its public URL.
-export async function uploadProductImage(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, 1200 / Math.max(bitmap.width, bitmap.height));
+// Recommended upload sizes, shown next to each admin upload box (the browser shrinks anything bigger).
+export const IMAGE_GUIDE = {
+  product: { maxSize: 1200, hint: 'Best: 1200 × 900 px (4:3 landscape), JPG or PNG. Larger photos are shrunk automatically.' },
+  banner: { maxSize: 1920, hint: 'Best: 1920 × 1080 px (16:9). Keep the subject on the right half; the headline covers the left.' },
+  logo: { maxSize: 600, hint: 'Best: 400 × 200 px PNG or SVG with a transparent background.' },
+} as const;
+
+// Admin only: shrinks the image in the browser (WebP ~80%) so Storage holds a small copy instead of a
+// multi-MB camera file, then returns its public URL. Logos keep their transparent background.
+export async function uploadImage(
+  file: File,
+  { bucket = 'product-images', maxSize = 1200 }: { bucket?: ImageBucket; maxSize?: number } = {}
+): Promise<string> {
+  const img = new Image();
+  img.src = URL.createObjectURL(file); // <img> also decodes SVG logos, unlike createImageBitmap
+  try {
+    await img.decode();
+  } finally {
+    URL.revokeObjectURL(img.src);
+  }
+  const w = img.naturalWidth || maxSize;
+  const h = img.naturalHeight || Math.round(maxSize / 2);
+  const scale = Math.min(1, maxSize / Math.max(w, h));
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
+  canvas.width = Math.round(w * scale);
+  canvas.height = Math.round(h * scale);
+  canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
   const toBlob = (type: string) => new Promise<Blob | null>((ok) => canvas.toBlob(ok, type, 0.8));
   let blob = await toBlob('image/webp');
-  if (!blob || blob.type !== 'image/webp') blob = await toBlob('image/jpeg'); // browsers without WebP encoding
+  // Browsers without WebP encoding: PNG keeps logo transparency, JPEG keeps photos small
+  if (!blob || blob.type !== 'image/webp') blob = await toBlob(bucket === 'site-assets' ? 'image/png' : 'image/jpeg');
   if (!blob) throw new Error('Could not read this image');
-  const ext = blob.type === 'image/webp' ? 'webp' : 'jpg';
-  const path = `products/${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from(PRODUCT_BUCKET).upload(path, blob, { contentType: blob.type, cacheControl: '31536000' });
+  const ext = blob.type.split('/')[1].replace('jpeg', 'jpg');
+  const path = `${bucket === 'product-images' ? 'products' : 'site'}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from(bucket).upload(path, blob, { contentType: blob.type, cacheControl: '31536000' });
   if (error) throw error;
-  return supabase.storage.from(PRODUCT_BUCKET).getPublicUrl(path).data.publicUrl;
+  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
 
-// Frees the Storage space of a photo we uploaded; ignores built-in /images/... and outside links.
-export async function deleteProductImage(url: string | undefined) {
-  const i = url?.indexOf(PRODUCT_URL_MARK) ?? -1;
-  if (!url || i < 0) return;
-  const { error } = await supabase.storage.from(PRODUCT_BUCKET).remove([url.slice(i + PRODUCT_URL_MARK.length)]);
-  if (error) console.warn('Could not delete old product image', error);
+// Frees the Storage space of an image we uploaded; ignores built-in /images/... files and outside links.
+export async function deleteUploadedImage(url: string | undefined) {
+  const m = url?.match(PUBLIC_URL);
+  if (!m) return;
+  const { error } = await supabase.storage.from(m[1]).remove([decodeURIComponent(m[2])]);
+  if (error) console.warn('Could not delete old image', error);
 }
 
 // Admin only: saves a private file under its original name (signed URL sent as an attachment).

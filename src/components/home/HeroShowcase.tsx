@@ -6,10 +6,10 @@ import { formatLKR } from '../../lib/formatters';
 import { Product } from '../../types';
 
 // Each hero slide = a catalogue product + a real-photo backdrop shown behind the whole hero while it is active.
-const HERO_SLIDES = [
+export const HERO_SLIDES = [
   { productId: 'prod-vc-double', tag: 'Bestseller', highlight: '8 premium board stocks', background: '/images/hero/visiting-cards.webp' },
   { productId: 'prod-bill-ncr', tag: 'Business essential', highlight: 'Duplicate & triplicate NCR', background: '/images/hero/bill-books.webp' },
-  { productId: 'prod-leaflets-double', tag: 'Marketing', highlight: 'Offset printed from 500 copies', background: '/images/hero/leaflets.webp' },
+  { productId: 'prod-leaflets-single', tag: 'Marketing', highlight: 'Offset printed from 500 copies', background: '/images/hero/leaflets.webp' },
   { productId: 'prod-stickers-colour', tag: 'Product labels', highlight: 'Gloss or matt sticker sheets', background: '/images/hero/stickers.webp' },
   { productId: 'prod-invitations-single', tag: 'Celebrations', highlight: 'White or metallic envelopes', background: '/images/hero/invitations.webp' },
 ];
@@ -20,7 +20,7 @@ type HeroSlide = (typeof HERO_SLIDES)[number] & { product: Product; fromPrice: n
 
 // Slides whose product still exists, with the lowest real price and what it buys (e.g. "100 Cards")
 export function useHeroSlides(): HeroSlide[] {
-  const { products, priceMatrix } = useStore();
+  const { products, priceMatrix, siteSettings } = useStore();
   return HERO_SLIDES.flatMap((s) => {
     const product = products.find((p) => p.id === s.productId && p.isActive);
     if (!product) return [];
@@ -28,7 +28,8 @@ export function useHeroSlides(): HeroSlide[] {
     const cheapest = cells.reduce<(typeof cells)[number] | undefined>((min, c) => (!min || c.price < min.price ? c : min), undefined);
     // Short unit for the price line, e.g. '2 Books · Duplicate (2-ply)' -> '2 Books'
     const fromUnit = (product.optionGroups?.[1]?.values.find((v) => v.id === cheapest?.optionValueB)?.label ?? '').split(' · ')[0];
-    return [{ ...s, product, fromPrice: cheapest?.price ?? 0, fromUnit }];
+    const background = siteSettings.heroBackgrounds[s.productId] || s.background; // admin-uploaded banner wins
+    return [{ ...s, background, product, fromPrice: cheapest?.price ?? 0, fromUnit }];
   });
 }
 

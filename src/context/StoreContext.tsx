@@ -70,7 +70,7 @@ interface StoreContextType {
   updateProduct: (updated: Product) => void;
   deleteProduct: (productId: string) => void;
   duplicateProduct: (productId: string) => Product | undefined;
-  updateSiteSettings: (newSettings: Partial<SiteSettings>) => void;
+  updateSiteSettings: (newSettings: Partial<SiteSettings>) => Promise<string | null>; // null = saved for every visitor
   loginAdmin: (username: string, password: string) => Promise<string | null>; // null = success, else error message
   logoutAdmin: () => Promise<void>;
   refreshAdminData: () => Promise<void>;
@@ -90,7 +90,7 @@ interface StoreContextType {
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 // Bump when SEED_PRODUCTS changes so browsers drop their stale saved copy.
-const PRODUCTS_KEY = 'aiprint_products_v5';
+const PRODUCTS_KEY = 'aiprint_products_v6';
 
 // Corrupt or missing localStorage must never blank the whole site.
 function load<T>(key: string, fallback: () => T): T {
@@ -111,6 +111,22 @@ function save(key: string, value: unknown) {
   }
 }
 
+// Saved copies from before a field existed get the default for it.
+const withDefaults = (saved: Partial<SiteSettings>): SiteSettings => ({
+  ...DEFAULT_SITE_SETTINGS,
+  ...saved,
+  bankDetails: { ...DEFAULT_SITE_SETTINGS.bankDetails, ...saved.bankDetails },
+  socialLinks: { ...DEFAULT_SITE_SETTINGS.socialLinks, ...saved.socialLinks },
+});
+
+// Staff's saved product list wins; built-in products added later (never saved or deleted by staff) are appended.
+// ponytail: later edits to a built-in product that staff already saved don't reach visitors; per-field merge if needed.
+type SavedProducts = { list: Product[]; removed: string[] };
+const mergeProducts = ({ list, removed }: SavedProducts): Product[] => [
+  ...list,
+  ...SEED_PRODUCTS.filter((p) => !removed.includes(p.id) && !list.some((x) => x.id === p.id)),
+];
+
 // Supabase Auth needs an email, so admin usernames map to an internal address (no mail is ever sent).
 const ADMIN_EMAIL_DOMAIN = 'admin.aiprintingsolutions.com';
 
@@ -123,7 +139,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const [categories] = useState<Category[]>(SEED_CATEGORIES);
 
-  const [siteSettings, setSiteSettings] = useState<SiteSettings>(() => load('aiprint_settings', () => DEFAULT_SITE_SETTINGS));
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>(() => withDefaults(load('aiprint_settings', () => DEFAULT_SITE_SETTINGS)));
+  const [removedProductIds, setRemovedProductIds] = useState<string[]>([]);
 
   const [cart, setCart] = useState<CartItem[]>(() => load('aiprint_cart', () => []));
 
@@ -147,24 +164,38 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => save('aiprint_cart', cart), [cart]);
   useEffect(() => save('aiprint_orders', orders), [orders]);
 
-  // Prices saved by staff in the admin panel override the built-in defaults for every visitor
+  // Prices, settings and products saved by staff in the admin panel override the built-in defaults for every
+  // visitor; the browser copy in localStorage only gives a fast first paint.
   useEffect(() => {
     supabase
       .from('site_settings')
-      .select('value')
-      .eq('key', 'price_matrix')
-      .maybeSingle()
+      .select('key, value')
+      .in('key', ['price_matrix', 'settings', 'products'])
       .then(({ data }) => {
-        // Merge per product so products never saved by staff keep their built-in prices
-        if (data?.value) setPriceMatrix((prev) => ({ ...prev, ...(data.value as Record<string, PriceMatrixCell[]>) }));
+        for (const row of data ?? []) {
+          // Merge per product so products never saved by staff keep their built-in prices
+          if (row.key === 'price_matrix') setPriceMatrix((prev) => ({ ...prev, ...(row.value as Record<string, PriceMatrixCell[]>) }));
+          if (row.key === 'settings') setSiteSettings(withDefaults(row.value as Partial<SiteSettings>));
+          if (row.key === 'products') {
+            setRemovedProductIds((row.value as SavedProducts).removed);
+            setProducts(mergeProducts(row.value as SavedProducts));
+          }
+        }
       });
   }, []);
 
-  const savePriceMatrix = async (): Promise<string | null> => {
-    const { error } = await supabase
-      .from('site_settings')
-      .upsert({ key: 'price_matrix', value: priceMatrix, updated_at: new Date().toISOString() });
+  const saveShared = async (key: string, value: unknown): Promise<string | null> => {
+    const { error } = await supabase.from('site_settings').upsert({ key, value, updated_at: new Date().toISOString() });
     return error ? error.message : null;
+  };
+
+  const savePriceMatrix = () => saveShared('price_matrix', priceMatrix);
+
+  // Admin product changes go live for everyone straight away
+  const publishProducts = (list: Product[], removed = removedProductIds) => {
+    setProducts(list);
+    setRemovedProductIds(removed);
+    saveShared('products', { list, removed }).then((err) => err && alert(`Product change not published: ${err}`));
   };
   useEffect(() => save('aiprint_settings', siteSettings), [siteSettings]);
   useEffect(() => save(PRODUCTS_KEY, products), [products]);
@@ -501,16 +532,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       id: `prod-${Date.now()}`,
       createdAt: new Date().toISOString(),
     };
-    setProducts((prev) => [newProduct, ...prev]);
+    publishProducts([newProduct, ...products]);
     return newProduct;
   };
 
   const updateProduct = (updated: Product) => {
-    setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    publishProducts(products.map((p) => (p.id === updated.id ? updated : p)));
   };
 
   const deleteProduct = (productId: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== productId));
+    publishProducts(products.filter((p) => p.id !== productId), [...removedProductIds, productId]);
   };
 
   const duplicateProduct = (productId: string): Product | undefined => {
@@ -523,12 +554,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       slug: `${orig.slug}-copy-${Date.now().toString().slice(-4)}`,
       createdAt: new Date().toISOString(),
     };
-    setProducts((prev) => [cloned, ...prev]);
+    publishProducts([cloned, ...products]);
     return cloned;
   };
 
   const updateSiteSettings = (newSettings: Partial<SiteSettings>) => {
-    setSiteSettings((prev) => ({ ...prev, ...newSettings }));
+    const next = { ...siteSettings, ...newSettings };
+    setSiteSettings(next);
+    return saveShared('settings', next);
   };
 
   const loginAdmin = async (username: string, password: string): Promise<string | null> => {

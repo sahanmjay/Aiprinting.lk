@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -31,9 +31,34 @@ import {
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatLKR, formatItemPrice, getWhatsAppUrl } from '../lib/formatters';
-import { openStoredFile, downloadStoredFile, uploadProductImage, deleteProductImage } from '../lib/supabase';
+import { openStoredFile, downloadStoredFile, uploadImage, deleteUploadedImage, IMAGE_GUIDE } from '../lib/supabase';
+import { HERO_SLIDES } from '../components/home/HeroShowcase';
+import { DEFAULT_SITE_SETTINGS } from '../data/seedData';
 import { tableOptionGroups } from '../data/priceTables';
-import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product } from '../types';
+import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product, SiteSettings, SocialLinks } from '../types';
+
+// Small "Upload" button around a hidden file input (images only)
+const UploadButton: React.FC<{ busy: boolean; label: string; onFile: (file: File) => void }> = ({ busy, label, onFile }) => (
+  <label
+    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded text-xs font-bold text-white cursor-pointer transition-colors ${
+      busy ? 'bg-slate-400 pointer-events-none' : 'bg-[#0F1B2D] hover:bg-[#182A45]'
+    }`}
+  >
+    {busy ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+    {busy ? 'Uploading…' : label}
+    <input
+      type="file"
+      accept="image/*"
+      className="sr-only"
+      disabled={busy}
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (file) onFile(file);
+      }}
+    />
+  </label>
+);
 
 // "delivered" is the completed state (kept as the DB value; shown to staff as Completed)
 const ORDER_STATUS: Record<OrderStatus, { label: string; badge: string }> = {
@@ -115,7 +140,49 @@ export const AdminPage: React.FC = () => {
 
   // Site Settings Tab State
   const [settingsForm, setSettingsForm] = useState(siteSettings);
+  const [settingsDirty, setSettingsDirty] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsError, setSettingsError] = useState('');
+  useEffect(() => {
+    if (!settingsDirty) setSettingsForm(siteSettings); // settings arrive from Supabase after the first paint
+  }, [siteSettings, settingsDirty]);
+  const editSettings = (patch: Partial<SiteSettings>) => {
+    setSettingsDirty(true);
+    setSettingsForm((f) => ({ ...f, ...patch }));
+  };
+  const editBank = (patch: Partial<SiteSettings['bankDetails']>) => editSettings({ bankDetails: { ...settingsForm.bankDetails, ...patch } });
+  const editSocial = (patch: Partial<SocialLinks>) => editSettings({ socialLinks: { ...settingsForm.socialLinks, ...patch } });
+
+  // Website images (hero banners, client logos, bank logo) are saved the moment they are uploaded or removed;
+  // the replaced file is deleted from Storage to keep it small.
+  const [imageBusy, setImageBusy] = useState<string | null>(null);
+  const [newLogoName, setNewLogoName] = useState('');
+  const saveImageSetting = async (
+    busyKey: string,
+    file: File,
+    maxSize: number,
+    patch: (url: string) => Partial<SiteSettings>,
+    oldUrl?: string
+  ) => {
+    setImageBusy(busyKey);
+    try {
+      const url = await uploadImage(file, { bucket: 'site-assets', maxSize });
+      const err = await updateSiteSettings(patch(url));
+      if (err) {
+        deleteUploadedImage(url);
+        alert(`Could not save: ${err}`);
+      } else deleteUploadedImage(oldUrl);
+    } catch (err) {
+      alert(`Upload failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+    } finally {
+      setImageBusy(null);
+    }
+  };
+  const removeImageSetting = async (patch: Partial<SiteSettings>, oldUrl?: string) => {
+    const err = await updateSiteSettings(patch);
+    if (err) alert(`Could not save: ${err}`);
+    else deleteUploadedImage(oldUrl);
+  };
 
   // Products Management State
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -150,7 +217,7 @@ export const AdminPage: React.FC = () => {
     if (!file) return;
     setImageUploading(true);
     try {
-      const url = await uploadProductImage(file);
+      const url = await uploadImage(file);
       pendingUploads.current.push(url);
       setProductForm((f) => ({ ...f, imageUrl: url }));
     } catch (err) {
@@ -161,7 +228,7 @@ export const AdminPage: React.FC = () => {
   };
 
   const closeProductModal = (keptUrl?: string) => {
-    pendingUploads.current.filter((u) => u !== keptUrl).forEach((u) => deleteProductImage(u));
+    pendingUploads.current.filter((u) => u !== keptUrl).forEach((u) => deleteUploadedImage(u));
     pendingUploads.current = [];
     setIsProductModalOpen(false);
   };
@@ -250,7 +317,7 @@ export const AdminPage: React.FC = () => {
       };
       updateProduct(updated);
       const oldUrl = editingProduct.images[0]?.imageUrl;
-      if (oldUrl && oldUrl !== productForm.imageUrl && !imageInUse(oldUrl, editingProduct.id)) deleteProductImage(oldUrl);
+      if (oldUrl && oldUrl !== productForm.imageUrl && !imageInUse(oldUrl, editingProduct.id)) deleteUploadedImage(oldUrl);
     } else {
       addProduct({
         name: productForm.name,
@@ -295,7 +362,7 @@ export const AdminPage: React.FC = () => {
     if (confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
       const urls = products.find((p) => p.id === productId)?.images.map((i) => i.imageUrl) ?? [];
       deleteProduct(productId);
-      urls.filter((u) => !imageInUse(u, productId)).forEach((u) => deleteProductImage(u));
+      urls.filter((u) => !imageInUse(u, productId)).forEach((u) => deleteUploadedImage(u));
     }
   };
 
@@ -545,9 +612,19 @@ export const AdminPage: React.FC = () => {
     }
   };
 
-  const handleSaveSettings = (e: React.FormEvent) => {
+  const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateSiteSettings(settingsForm);
+    // Images are managed separately (saved on upload), so only the text fields are taken from the form
+    const { clientLogos, heroBackgrounds, ...text } = settingsForm;
+    const pasted = text.elfsightReviewsId.match(/elfsight-app-([\w-]+)/); // staff may paste the whole embed code
+    const err = await updateSiteSettings({
+      ...text,
+      elfsightReviewsId: pasted ? pasted[1] : text.elfsightReviewsId.trim(),
+      bankDetails: { ...text.bankDetails, logoUrl: siteSettings.bankDetails.logoUrl },
+    });
+    setSettingsError(err ?? '');
+    if (err) return;
+    setSettingsDirty(false);
     setSettingsSaved(true);
     setTimeout(() => setSettingsSaved(false), 3000);
   };
@@ -1626,7 +1703,7 @@ export const AdminPage: React.FC = () => {
                       )}
                     </div>
                     <p className="text-[10px] text-slate-400">
-                      Photos are shrunk to 1200px before upload (usually under 300 KB each) and the old uploaded photo is deleted when you save, so Supabase storage stays small.
+                      {IMAGE_GUIDE.product.hint} Stored copies are usually under 300 KB, and the old uploaded photo is deleted when you save.
                     </p>
                     {/* Real photo presets (files in public/images/products) */}
                     <div className="flex flex-wrap gap-1.5 pt-1">
@@ -2021,7 +2098,7 @@ export const AdminPage: React.FC = () => {
               <input
                 type="text"
                 value={settingsForm.hotline}
-                onChange={(e) => setSettingsForm({ ...settingsForm, hotline: e.target.value })}
+                onChange={(e) => editSettings({ hotline: e.target.value })}
                 className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
               />
             </div>
@@ -2031,7 +2108,7 @@ export const AdminPage: React.FC = () => {
               <input
                 type="text"
                 value={settingsForm.landline}
-                onChange={(e) => setSettingsForm({ ...settingsForm, landline: e.target.value })}
+                onChange={(e) => editSettings({ landline: e.target.value })}
                 className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
               />
             </div>
@@ -2041,7 +2118,7 @@ export const AdminPage: React.FC = () => {
               <input
                 type="text"
                 value={settingsForm.whatsapp}
-                onChange={(e) => setSettingsForm({ ...settingsForm, whatsapp: e.target.value })}
+                onChange={(e) => editSettings({ whatsapp: e.target.value })}
                 className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
               />
             </div>
@@ -2052,7 +2129,7 @@ export const AdminPage: React.FC = () => {
                 type="number"
                 value={settingsForm.deliveryFee}
                 onChange={(e) =>
-                  setSettingsForm({ ...settingsForm, deliveryFee: parseFloat(e.target.value) || 0 })
+                  editSettings({ deliveryFee: parseFloat(e.target.value) || 0 })
                 }
                 className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded font-bold"
               />
@@ -2063,7 +2140,7 @@ export const AdminPage: React.FC = () => {
               <input
                 type="email"
                 value={settingsForm.email}
-                onChange={(e) => setSettingsForm({ ...settingsForm, email: e.target.value })}
+                onChange={(e) => editSettings({ email: e.target.value })}
                 className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
               />
             </div>
@@ -2073,7 +2150,7 @@ export const AdminPage: React.FC = () => {
               <input
                 type="email"
                 value={settingsForm.artworkEmail}
-                onChange={(e) => setSettingsForm({ ...settingsForm, artworkEmail: e.target.value })}
+                onChange={(e) => editSettings({ artworkEmail: e.target.value })}
                 className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
               />
             </div>
@@ -2083,8 +2160,129 @@ export const AdminPage: React.FC = () => {
               <input
                 type="text"
                 value={settingsForm.announcementText}
-                onChange={(e) => setSettingsForm({ ...settingsForm, announcementText: e.target.value })}
+                onChange={(e) => editSettings({ announcementText: e.target.value })}
                 className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
+              />
+            </div>
+
+            <div className="sm:col-span-2 pt-3 border-t border-[#E6E0D6]">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#0F1B2D]">Bank Transfer Details</h4>
+              <p className="text-[11px] text-slate-500 mt-0.5">Shown to customers at checkout when they choose bank transfer.</p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Bank Name</label>
+              <input
+                type="text"
+                value={settingsForm.bankDetails.bankName}
+                onChange={(e) => editBank({ bankName: e.target.value })}
+                className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Branch</label>
+              <input
+                type="text"
+                value={settingsForm.bankDetails.branch}
+                onChange={(e) => editBank({ branch: e.target.value })}
+                className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Account Name</label>
+              <input
+                type="text"
+                value={settingsForm.bankDetails.accountName}
+                onChange={(e) => editBank({ accountName: e.target.value })}
+                className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Account Number</label>
+              <input
+                type="text"
+                value={settingsForm.bankDetails.accountNumber}
+                onChange={(e) => editBank({ accountNumber: e.target.value })}
+                className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded font-mono"
+              />
+            </div>
+
+            <div className="sm:col-span-2 pt-3 border-t border-[#E6E0D6]">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#0F1B2D]">Social Media Links</h4>
+              <p className="text-[11px] text-slate-500 mt-0.5">Paste each page address. Icons without a link are shown greyed out.</p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Facebook</label>
+              <input
+                type="text"
+                placeholder="https://facebook.com/yourpage"
+                value={settingsForm.socialLinks.facebook}
+                onChange={(e) => editSocial({ facebook: e.target.value })}
+                className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Instagram</label>
+              <input
+                type="text"
+                placeholder="https://instagram.com/yourpage"
+                value={settingsForm.socialLinks.instagram}
+                onChange={(e) => editSocial({ instagram: e.target.value })}
+                className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">YouTube</label>
+              <input
+                type="text"
+                placeholder="https://youtube.com/@yourchannel"
+                value={settingsForm.socialLinks.youtube}
+                onChange={(e) => editSocial({ youtube: e.target.value })}
+                className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">TikTok</label>
+              <input
+                type="text"
+                placeholder="https://tiktok.com/yourpage"
+                value={settingsForm.socialLinks.tiktok}
+                onChange={(e) => editSocial({ tiktok: e.target.value })}
+                className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">LinkedIn</label>
+              <input
+                type="text"
+                placeholder="https://linkedin.com/yourpage"
+                value={settingsForm.socialLinks.linkedin}
+                onChange={(e) => editSocial({ linkedin: e.target.value })}
+                className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
+              />
+            </div>
+
+            <div className="sm:col-span-2 pt-3 border-t border-[#E6E0D6]">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#0F1B2D]">Google Reviews (Elfsight)</h4>
+              <p className="text-[11px] text-slate-500 mt-0.5">Paste the Elfsight install code or just the widget id. Leave empty to hide the reviews section.</p>
+            </div>
+
+            <div className="sm:col-span-2 space-y-1">
+              <label className="font-bold text-slate-700">Elfsight Widget ID or Install Code</label>
+              <input
+                type="text"
+                placeholder="elfsight-app-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                value={settingsForm.elfsightReviewsId}
+                onChange={(e) => editSettings({ elfsightReviewsId: e.target.value })}
+                className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded font-mono"
               />
             </div>
           </div>
@@ -2104,8 +2302,167 @@ export const AdminPage: React.FC = () => {
                 Settings saved successfully!
               </span>
             )}
+            {settingsError && <span className="text-xs font-bold text-red-600">Not saved: {settingsError}</span>}
           </div>
         </form>
+      )}
+
+      {activeTab === 'settings' && (
+        <div className="bg-white p-6 sm:p-8 rounded-lg border border-[#E6E0D6] shadow-xs space-y-8 max-w-3xl text-xs">
+          <div className="border-b border-[#E6E0D6] pb-3">
+            <h3 className="text-base font-bold text-[#0F1B2D] uppercase tracking-wider">Website Images</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Changes here go live as soon as an image is uploaded or removed. Images are shrunk in your browser before upload.
+            </p>
+          </div>
+
+          {/* Hero banners */}
+          <section className="space-y-3">
+            <div>
+              <h4 className="font-bold text-[#0F1B2D] uppercase tracking-wider">Homepage Hero Banners</h4>
+              <p className="text-[11px] text-slate-500">{IMAGE_GUIDE.banner.hint} One banner per featured product.</p>
+            </div>
+            <ul className="space-y-2">
+              {HERO_SLIDES.map((slide) => {
+                const custom = siteSettings.heroBackgrounds[slide.productId];
+                const name = products.find((p) => p.id === slide.productId)?.name ?? slide.productId;
+                return (
+                  <li key={slide.productId} className="flex items-center gap-3 p-2 rounded border border-[#E6E0D6]">
+                    <img src={custom || slide.background} alt="" className="w-28 h-16 object-cover rounded bg-slate-100 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-[#0F1B2D] truncate">{name}</div>
+                      <div className="text-[10px] text-slate-500">{custom ? 'Your uploaded banner' : 'Built-in photo'}</div>
+                    </div>
+                    <UploadButton
+                      busy={imageBusy === `hero-${slide.productId}`}
+                      label={custom ? 'Replace' : 'Upload'}
+                      onFile={(file) =>
+                        saveImageSetting(
+                          `hero-${slide.productId}`,
+                          file,
+                          IMAGE_GUIDE.banner.maxSize,
+                          (url) => ({ heroBackgrounds: { ...siteSettings.heroBackgrounds, [slide.productId]: url } }),
+                          custom
+                        )
+                      }
+                    />
+                    {custom && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const rest = { ...siteSettings.heroBackgrounds };
+                          delete rest[slide.productId];
+                          removeImageSetting({ heroBackgrounds: rest }, custom);
+                        }}
+                        className="text-slate-500 hover:text-red-600 text-[11px] font-semibold"
+                      >
+                        Use built-in
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+
+          {/* Client logos */}
+          <section className="space-y-3">
+            <div>
+              <h4 className="font-bold text-[#0F1B2D] uppercase tracking-wider">Our Clients — Logos</h4>
+              <p className="text-[11px] text-slate-500">
+                {IMAGE_GUIDE.logo.hint} The "Our Clients" section appears on the homepage once at least one logo is added.
+              </p>
+            </div>
+            {siteSettings.clientLogos.length > 0 && (
+              <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {siteSettings.clientLogos.map((logo) => (
+                  <li key={logo.id} className="p-2 rounded border border-[#E6E0D6] flex flex-col items-center gap-1.5">
+                    <img src={logo.logoUrl} alt={logo.companyName} className="h-12 max-w-full object-contain" />
+                    <div className="font-semibold text-[#0F1B2D] text-center truncate w-full">{logo.companyName}</div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!confirm(`Remove the ${logo.companyName} logo?`)) return;
+                        removeImageSetting({ clientLogos: siteSettings.clientLogos.filter((l) => l.id !== logo.id) }, logo.logoUrl);
+                      }}
+                      className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-red-600"
+                    >
+                      <Trash2 className="w-3 h-3" /> Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={newLogoName}
+                onChange={(e) => setNewLogoName(e.target.value)}
+                placeholder="Client / company name"
+                className="flex-1 min-w-[180px] p-2 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
+              />
+              {newLogoName.trim() ? (
+                <UploadButton
+                  busy={imageBusy === 'logo'}
+                  label="Upload logo"
+                  onFile={(file) =>
+                    saveImageSetting('logo', file, IMAGE_GUIDE.logo.maxSize, (url) => ({
+                      clientLogos: [
+                        ...siteSettings.clientLogos,
+                        { id: `logo-${Date.now()}`, companyName: newLogoName.trim(), logoUrl: url, sortOrder: siteSettings.clientLogos.length + 1, isActive: true },
+                      ],
+                    })).then(() => setNewLogoName(''))
+                  }
+                />
+              ) : (
+                <span className="text-[11px] text-slate-400">Type the company name, then upload its logo.</span>
+              )}
+            </div>
+          </section>
+
+          {/* Bank logo */}
+          <section className="space-y-3">
+            <div>
+              <h4 className="font-bold text-[#0F1B2D] uppercase tracking-wider">Bank Logo (Checkout)</h4>
+              <p className="text-[11px] text-slate-500">{IMAGE_GUIDE.logo.hint}</p>
+            </div>
+            <div className="flex items-center gap-3 p-2 rounded border border-[#E6E0D6]">
+              {siteSettings.bankDetails.logoUrl ? (
+                <img src={siteSettings.bankDetails.logoUrl} alt="" className="h-10 w-auto max-w-[160px] object-contain shrink-0" />
+              ) : (
+                <span className="text-slate-400">No logo</span>
+              )}
+              <div className="flex-1" />
+              <UploadButton
+                busy={imageBusy === 'bank'}
+                label="Replace"
+                onFile={(file) =>
+                  saveImageSetting(
+                    'bank',
+                    file,
+                    IMAGE_GUIDE.logo.maxSize,
+                    (url) => ({ bankDetails: { ...siteSettings.bankDetails, logoUrl: url } }),
+                    siteSettings.bankDetails.logoUrl
+                  )
+                }
+              />
+              {siteSettings.bankDetails.logoUrl !== DEFAULT_SITE_SETTINGS.bankDetails.logoUrl && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    removeImageSetting(
+                      { bankDetails: { ...siteSettings.bankDetails, logoUrl: DEFAULT_SITE_SETTINGS.bankDetails.logoUrl } },
+                      siteSettings.bankDetails.logoUrl
+                    )
+                  }
+                  className="text-slate-500 hover:text-red-600 text-[11px] font-semibold"
+                >
+                  Use built-in
+                </button>
+              )}
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );

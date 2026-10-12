@@ -12,18 +12,18 @@ import {
   PackageCheck,
   MessageCircle,
   Flame,
-  Star,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatLKR } from '../lib/formatters';
 import { RegistrationMark } from '../components/common/RegistrationMark';
-import { SEED_TESTIMONIALS, SEED_CLIENT_LOGOS } from '../data/seedData';
+import { GoogleReviews } from '../components/home/GoogleReviews';
 import { getWhatsAppUrl } from '../lib/formatters';
 import { FlowButton } from '../components/ui/flow-button';
 import { HeroBackdrop, HeroProductSlider, useHeroSlider, useHeroSlides } from '../components/home/HeroShowcase';
 
 export const HomePage: React.FC = () => {
   const { categories, products, siteSettings, getFromPrice } = useStore();
+  const clientLogos = siteSettings.clientLogos.filter((l) => l.isActive && l.logoUrl);
 
   const featuredProducts = products.filter((p) => p.isActive && (p.isFeatured || p.isHot)).slice(0, 4);
   const heroSlides = useHeroSlides();
@@ -328,67 +328,31 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 6. TESTIMONIALS */}
-      <section className="reveal max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
-        <div className="text-center max-w-xl mx-auto space-y-2">
-          <div className="text-xs font-bold uppercase tracking-widest text-[#D6342C]">
-            Verified Client Reviews
+      {/* 6. GOOGLE REVIEWS (Elfsight widget, hidden until its id is set in the admin panel) */}
+      <GoogleReviews widgetId={siteSettings.elfsightReviewsId} />
+
+      {/* 7. CLIENT LOGO WALL (logos uploaded in Admin → Website Images) */}
+      {clientLogos.length > 0 && (
+        <section className="reveal max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
+          <div className="text-center space-y-2">
+            <div className="text-xs font-bold uppercase tracking-widest text-[#D6342C]">Our Clients</div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#0F1B2D]">Trusted by Businesses Across Sri Lanka</h2>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-[#0F1B2D]">
-            What Our Clients Say
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {SEED_TESTIMONIALS.map((t) => (
-            <div
-              key={t.id}
-              className="bg-white p-6 rounded border border-[#E6E0D6] shadow-xs flex flex-col justify-between space-y-4"
-            >
-              <div className="space-y-3">
-                <div className="flex gap-1 text-amber-500">
-                  {[...Array(t.rating)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-current" />
-                  ))}
-                </div>
-                <p className="text-xs text-slate-700 italic leading-relaxed">
-                  "{t.content}"
-                </p>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-[#0F1B2D] text-white font-bold text-xs flex items-center justify-center shrink-0">
-                  {t.customerName.charAt(0)}
-                </div>
-                <div>
-                  <h4 className="font-bold text-xs text-[#0F1B2D]">{t.customerName}</h4>
-                  <div className="text-[11px] text-slate-500">{t.customerTitle}</div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 7. CLIENT LOGO WALL */}
-      <section className="reveal max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
-        <div className="text-center">
-          <span className="text-xs font-bold uppercase tracking-widest text-slate-400">
-            Trusted by Leading Organizations Across Sri Lanka
-          </span>
-        </div>
-
-        <div className="bg-white p-6 rounded border border-[#E6E0D6] grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6 items-center justify-items-center opacity-80 hover:opacity-100 transition-opacity">
-          {SEED_CLIENT_LOGOS.map((logo) => (
-            <div
-              key={logo.id}
-              className="w-full py-3 px-2 text-center text-xs font-semibold text-slate-600 bg-[#FAF8F5] rounded border border-slate-200/60 hover:text-[#0F1B2D] hover:border-[#0F1B2D] transition-colors"
-            >
-              {logo.companyName}
-            </div>
-          ))}
-        </div>
-      </section>
+          <ul className="bg-white p-6 sm:p-8 rounded-lg border border-[#E6E0D6] grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6 sm:gap-8 items-center">
+            {clientLogos.map((logo) => (
+              <li key={logo.id} className="flex items-center justify-center h-16">
+                <img
+                  src={logo.logoUrl}
+                  alt={logo.companyName}
+                  title={logo.companyName}
+                  loading="lazy"
+                  className="max-h-full max-w-full object-contain grayscale opacity-75 hover:grayscale-0 hover:opacity-100 transition"
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* 8. CTA BAND */}
       <section className="reveal max-w-7xl mx-auto px-4 sm:px-6">

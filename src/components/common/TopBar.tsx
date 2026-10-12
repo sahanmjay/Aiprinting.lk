@@ -1,6 +1,7 @@
 import React from 'react';
 import { Phone, Mail, Truck } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
+import { SocialIcons } from './SocialIcons';
 
 export const TopBar: React.FC = () => {
   const { siteSettings } = useStore();
@@ -42,6 +43,11 @@ export const TopBar: React.FC = () => {
             <Mail className="w-3 h-3 text-slate-400" />
             <span>{siteSettings.email}</span>
           </a>
+
+          <SocialIcons
+            className="hidden lg:flex gap-0.5 border-l border-slate-600 pl-3"
+            itemClassName="w-6 h-6 flex items-center justify-center rounded text-slate-300 hover:text-white hover:bg-white/10 transition-colors [&_svg]:w-3.5 [&_svg]:h-3.5"
+          />
         </div>
       </div>
     </div>

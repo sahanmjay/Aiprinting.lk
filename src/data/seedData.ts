@@ -1,4 +1,4 @@
-import { Category, Product, SiteSettings, Testimonial, ClientLogo, PriceMatrixCell } from '../types';
+import { Category, Product, SiteSettings, PriceMatrixCell } from '../types';
 import { PRICE_TABLES, tableOptionGroups, tablePriceCells } from './priceTables';
 
 export const SRI_LANKA_DISTRICTS = [
@@ -48,7 +48,12 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
     branch: 'Boralesgamuwa Branch',
     accountName: 'Ai Printing Solutions (Pvt) Ltd',
     accountNumber: '8004 592 104',
+    logoUrl: '/images/bank/commercial-bank.svg',
   },
+  socialLinks: { facebook: '', instagram: '', youtube: '', tiktok: '', linkedin: '' },
+  elfsightReviewsId: '',
+  clientLogos: [],
+  heroBackgrounds: {},
   gtmId: 'GTM-AIPRINT',
   metaPixelId: '494726470920317',
 };
@@ -336,9 +341,9 @@ export const SEED_PRODUCTS: Product[] = [
   makeProduct({
     id: 'prod-leaflets-single',
     slug: 'single-side-leaflets',
-    name: 'Single Side Leaflets',
+    name: 'Leaflets',
     categoryId: 'cat-leaflets',
-    shortDescription: 'Full-colour one-side leaflets, A5 or A4, on 120gsm or 150gsm coated art paper.',
+    shortDescription: 'Full-colour single or double side leaflets, A5 or A4, on 120gsm or 150gsm coated art paper.',
     longDescription: `Digitally printed for small runs; orders of 500 or more are printed on our six-colour Heidelberg offset press. Please supply artwork in CMYK for offset printing, and ${CALL} for special requirements.`,
     deliveryNote: 'Island-wide delivery. Offset runs (500+) take 3 working days.',
     sizeNote: 'A5 (148 × 210 mm) or A4 (210 × 297 mm).',
@@ -358,13 +363,14 @@ export const SEED_PRODUCTS: Product[] = [
     images: photos('leaflets/4', 'leaflets/6', 'leaflets/7', 'leaflets/8'),
     imageAlt: 'Double sided leaflets',
     sortOrder: 8,
+    isActive: false,
   }),
   makeProduct({
     id: 'prod-invitations-single',
     slug: 'invitation-cards-single-side',
-    name: 'Invitation Cards — Single Side',
+    name: 'Invitation Cards',
     categoryId: 'cat-invitations',
-    shortDescription: 'Flat (non-folding) cards for invitations, announcements and postcards on 260–300gsm board.',
+    shortDescription: 'Single side flat cards or double side folded cards for invitations and announcements, on 260–300gsm board.',
     longDescription: `Made from 260gsm to 300gsm card stock and available with white or metallic blank envelopes. Custom sizes, foiling and embossing on request — ${CALL}.`,
     deliveryNote: 'Island-wide delivery within 1–2 days.',
     sizeNote: '5 × 7 inch. Custom sizes on request.',
@@ -384,6 +390,7 @@ export const SEED_PRODUCTS: Product[] = [
     images: photos('invitations/6', 'invitations/2', 'invitations/1'),
     imageAlt: 'Folded invitation cards',
     sortOrder: 10,
+    isActive: false,
   }),
   makeProduct({
     id: 'prod-certificates',
@@ -401,9 +408,9 @@ export const SEED_PRODUCTS: Product[] = [
   makeProduct({
     id: 'prod-colour-print',
     slug: 'single-side-colour-print-outs',
-    name: 'Single Side Print Outs',
+    name: 'Colour Print Outs',
     categoryId: 'cat-colour-print',
-    shortDescription: 'Single-side colour prints on matt art paper or premium boards.',
+    shortDescription: 'Single or double side colour prints on matt art paper or premium boards.',
     longDescription: 'Colour prints for presentations, menus, flyers and small runs, on 120–150gsm matt art paper or 250–300gsm premium boards.',
     deliveryNote: 'Island-wide delivery within 1–2 days.',
     sizeNote: 'Tell us your size in the special instructions.',
@@ -414,9 +421,9 @@ export const SEED_PRODUCTS: Product[] = [
   makeProduct({
     id: 'prod-laser-single',
     slug: 'black-laser-printouts-single-side',
-    name: 'Black Laser Printouts — Single Side',
+    name: 'Black Laser Printouts',
     categoryId: 'cat-black-laser',
-    shortDescription: 'Fast black & white laser printing — up to 110 pages per minute, one-day service.',
+    shortDescription: 'Fast single or double side black & white laser printing — up to 110 pages per minute, one-day service.',
     longDescription: `High-quality, high-speed black and white laser printing, ideal for applications, course materials, tuition classes and test papers. Book binding and stapling available — ${CALL} for details.`,
     deliveryNote: 'One-day service. Island-wide delivery available.',
     sizeNote: 'A4 or A3 on 70gsm bank paper (up to 150gsm on request).',
@@ -436,6 +443,7 @@ export const SEED_PRODUCTS: Product[] = [
     images: photos('placeholder-laser'),
     imageAlt: 'Double sided black and white printouts',
     sortOrder: 14,
+    isActive: false,
   }),
   makeProduct({
     id: 'prod-stickers-colour',
@@ -481,7 +489,7 @@ export const SEED_PRODUCTS: Product[] = [
     slug: 'pvc-id-cards',
     name: 'PVC ID Cards (86 × 54 mm)',
     categoryId: 'cat-id-cards',
-    shortDescription: 'Durable PVC ID cards in standard credit-card size for staff, students and members.',
+    shortDescription: 'Durable single or double side PVC ID cards in credit-card size for staff, students and members.',
     longDescription: 'Long-lasting cards for employee IDs, student IDs, membership cards and customer reward cards.',
     deliveryNote: 'Island-wide delivery within 1–2 days, Rs. 400 extra.',
     sizeNote: '86 × 54 mm (CR80 credit-card size).',
@@ -489,57 +497,40 @@ export const SEED_PRODUCTS: Product[] = [
     imageAlt: 'PVC ID cards',
     sortOrder: 18,
   }),
+  makeProduct({
+    id: 'prod-colour-print-double',
+    slug: 'double-side-colour-print-outs',
+    name: 'Double Side Colour Print Outs',
+    categoryId: 'cat-colour-print',
+    shortDescription: 'Double-side colour prints on matt art paper or premium boards.',
+    longDescription: 'Colour prints on both sides for menus, flyers, booklets and small runs, on 120–150gsm matt art paper or 250–300gsm premium boards.',
+    deliveryNote: 'Island-wide delivery within 1–2 days.',
+    sizeNote: 'Tell us your size in the special instructions.',
+    images: photos('placeholder-colour-print'),
+    imageAlt: 'Double side colour print outs',
+    sortOrder: 19,
+    isActive: false,
+  }),
+  makeProduct({
+    id: 'prod-pvc-id-double',
+    slug: 'double-side-pvc-id-cards',
+    name: 'Double Side PVC ID Cards (86 × 54 mm)',
+    categoryId: 'cat-id-cards',
+    shortDescription: 'PVC ID cards printed on both sides, in credit-card size.',
+    longDescription: 'Use the back for terms, an emergency contact, a barcode or a second language. Long-lasting cards for employee, student and membership IDs.',
+    deliveryNote: 'Island-wide delivery within 1–2 days, Rs. 400 extra.',
+    sizeNote: '86 × 54 mm (CR80 credit-card size).',
+    images: photos('placeholder-pvc-id'),
+    imageAlt: 'Double side PVC ID cards',
+    sortOrder: 20,
+    isActive: false,
+  }),
 ];
 
 // Built-in prices for every product (admin-saved prices in Supabase override these per product)
 export const SEED_PRICE_MATRIX: Record<string, PriceMatrixCell[]> = Object.fromEntries(
   Object.entries(PRICE_TABLES).map(([id, t]) => [id, tablePriceCells(id, t)])
 );
-
-export const SEED_TESTIMONIALS: Testimonial[] = [
-  {
-    id: 'test-1',
-    customerName: 'Ms. Dinushka Wimalaratne',
-    customerTitle: 'Complex Payable Manager, UAE Hotels',
-    content: 'Ai Printing Solutions has been our trusted print partner for our regional requirements. The paper stock quality, exact colour fidelity, and reliable timelines are unmatched in Sri Lanka. Their double-sided metallic visiting cards always receive compliments.',
-    rating: 5,
-    isPublished: true,
-    sortOrder: 1,
-  },
-  {
-    id: 'test-2',
-    customerName: 'Mr. S.K.K. Wijesekara',
-    customerTitle: 'Managing Director, Colombo Enterprise',
-    content: 'We shifted our corporate letterhead and carbonless invoice book printing to Ai Printing after frustrating delays elsewhere. Delivered to our Boralesgamuwa offices within 48 hours without a single defect. Highly recommended for commercial grade printing.',
-    rating: 5,
-    isPublished: true,
-    sortOrder: 2,
-  },
-  {
-    id: 'test-3',
-    customerName: 'Kavinda Perera',
-    customerTitle: 'Creative Director, Studio Seven',
-    content: 'The 300gsm Ice Gold board visiting cards are stunning. The online pricing calculator makes quoting our clients effortless, and the team in Boralesgamuwa always checks our bleed marks before printing.',
-    rating: 5,
-    isPublished: true,
-    sortOrder: 3,
-  },
-];
-
-export const SEED_CLIENT_LOGOS: ClientLogo[] = [
-  { id: 'logo-1', companyName: 'Hemas Holdings', logoUrl: '', sortOrder: 1, isActive: true },
-  { id: 'logo-2', companyName: 'Aitken Spence', logoUrl: '', sortOrder: 2, isActive: true },
-  { id: 'logo-3', companyName: 'Ceylon Petroleum', logoUrl: '', sortOrder: 3, isActive: true },
-  { id: 'logo-4', companyName: 'Dialog Axiata', logoUrl: '', sortOrder: 4, isActive: true },
-  { id: 'logo-5', companyName: 'Commercial Bank', logoUrl: '', sortOrder: 5, isActive: true },
-  { id: 'logo-6', companyName: 'John Keells', logoUrl: '', sortOrder: 6, isActive: true },
-  { id: 'logo-7', companyName: 'Hayleys Group', logoUrl: '', sortOrder: 7, isActive: true },
-  { id: 'logo-8', companyName: 'MAS Holdings', logoUrl: '', sortOrder: 8, isActive: true },
-  { id: 'logo-9', companyName: 'Brandix', logoUrl: '', sortOrder: 9, isActive: true },
-  { id: 'logo-10', companyName: 'Jetwing Hotels', logoUrl: '', sortOrder: 10, isActive: true },
-  { id: 'logo-11', companyName: 'Cargills Ceylon', logoUrl: '', sortOrder: 11, isActive: true },
-  { id: 'logo-12', companyName: 'Lanka IOC', logoUrl: '', sortOrder: 12, isActive: true },
-];
 
 export interface FAQItem {
   id: string;
