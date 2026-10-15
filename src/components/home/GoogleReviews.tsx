@@ -14,7 +14,7 @@ export const GoogleReviews: React.FC<{ widgetId: string }> = ({ widgetId }) => {
 
   if (!widgetId) return null;
   return (
-    <section className="reveal max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
+    <section className="reveal max-w-7xl mx-auto px-4 sm:px-6 space-y-4 -mt-6 sm:-mt-12">
       <div className="text-center max-w-xl mx-auto space-y-2">
         <div className="text-xs font-bold uppercase tracking-widest text-[#D6342C]">Google Reviews</div>
         <h2 className="text-2xl sm:text-3xl font-bold text-[#0F1B2D]">What Our Customers Say</h2>

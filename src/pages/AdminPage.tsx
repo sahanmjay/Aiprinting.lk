@@ -37,6 +37,8 @@ import { DEFAULT_SITE_SETTINGS } from '../data/seedData';
 import { tableOptionGroups } from '../data/priceTables';
 import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product, SiteSettings, SocialLinks } from '../types';
 
+const MAX_PRODUCT_PHOTOS = 4;
+
 // Small "Upload" button around a hidden file input (images only)
 const UploadButton: React.FC<{ busy: boolean; label: string; onFile: (file: File) => void }> = ({ busy, label, onFile }) => (
   <label
@@ -196,7 +198,7 @@ export const AdminPage: React.FC = () => {
     basePrice: 1000,
     shortDescription: '',
     longDescription: '',
-    imageUrl: '',
+    imageUrls: [] as string[], // first = main photo
     deliveryNote: 'Island-wide delivery within 1–2 days, Rs. 400 extra.',
     sizeNote: '',
     isHot: false,
@@ -207,19 +209,30 @@ export const AdminPage: React.FC = () => {
 
   // Photos uploaded while the editor is open; the ones not kept are removed again to save Storage space
   const pendingUploads = useRef<string[]>([]);
+  const [photoLink, setPhotoLink] = useState('');
   const [imageUploading, setImageUploading] = useState(false);
   const imageInUse = (url: string, exceptProductId?: string) =>
     products.some((p) => p.id !== exceptProductId && p.images.some((i) => i.imageUrl === url));
 
+  const photosFull = productForm.imageUrls.length >= MAX_PRODUCT_PHOTOS;
+  const addProductPhoto = (url: string) =>
+    setProductForm((f) =>
+      !url || f.imageUrls.includes(url) || f.imageUrls.length >= MAX_PRODUCT_PHOTOS ? f : { ...f, imageUrls: [...f.imageUrls, url] }
+    );
+  const removeProductPhoto = (url: string) => setProductForm((f) => ({ ...f, imageUrls: f.imageUrls.filter((u) => u !== url) }));
+  const makeMainPhoto = (url: string) => setProductForm((f) => ({ ...f, imageUrls: [url, ...f.imageUrls.filter((u) => u !== url)] }));
+
   const handleUploadProductImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const files = [...(e.target.files ?? [])].slice(0, MAX_PRODUCT_PHOTOS - productForm.imageUrls.length);
     e.target.value = '';
-    if (!file) return;
+    if (!files.length) return;
     setImageUploading(true);
     try {
-      const url = await uploadImage(file);
-      pendingUploads.current.push(url);
-      setProductForm((f) => ({ ...f, imageUrl: url }));
+      for (const file of files) {
+        const url = await uploadImage(file);
+        pendingUploads.current.push(url);
+        addProductPhoto(url);
+      }
     } catch (err) {
       alert(`Upload failed: ${err instanceof Error ? err.message : 'unknown error'}`);
     } finally {
@@ -227,8 +240,18 @@ export const AdminPage: React.FC = () => {
     }
   };
 
-  const closeProductModal = (keptUrl?: string) => {
-    pendingUploads.current.filter((u) => u !== keptUrl).forEach((u) => deleteUploadedImage(u));
+  const productImages = (productId: string, urls: string[], alt: string) =>
+    (urls.length ? urls : ['/images/products/placeholder.webp']).map((imageUrl, i) => ({
+      id: `img-${productId}-${Date.now()}-${i + 1}`,
+      productId,
+      imageUrl,
+      altText: alt,
+      sortOrder: i + 1,
+      isPrimary: i === 0,
+    }));
+
+  const closeProductModal = (keptUrls: string[] = []) => {
+    pendingUploads.current.filter((u) => !keptUrls.includes(u)).forEach((u) => deleteUploadedImage(u));
     pendingUploads.current = [];
     setIsProductModalOpen(false);
   };
@@ -242,7 +265,7 @@ export const AdminPage: React.FC = () => {
       basePrice: 1000,
       shortDescription: '',
       longDescription: '',
-      imageUrl: '/images/products/placeholder.webp',
+      imageUrls: [],
       deliveryNote: 'Island-wide delivery within 1–2 days, Rs. 400 extra.',
       sizeNote: '',
       isHot: false,
@@ -262,7 +285,7 @@ export const AdminPage: React.FC = () => {
       basePrice: p.basePrice,
       shortDescription: p.shortDescription,
       longDescription: p.longDescription,
-      imageUrl: p.images[0]?.imageUrl || '',
+      imageUrls: p.images.map((i) => i.imageUrl),
       deliveryNote: p.deliveryNote,
       sizeNote: p.sizeNote || '',
       isHot: p.isHot,
@@ -301,23 +324,13 @@ export const AdminPage: React.FC = () => {
         isFeatured: productForm.isFeatured,
         isActive: productForm.isActive,
         isVariable: productForm.isVariable,
-        images: [
-          {
-            id: editingProduct.images[0]?.id || `img-${Date.now()}`,
-            productId: editingProduct.id,
-            imageUrl:
-              productForm.imageUrl ||
-              '/images/products/placeholder.webp',
-            altText: productForm.name,
-            sortOrder: 1,
-            isPrimary: true,
-          },
-          ...editingProduct.images.slice(1),
-        ],
+        images: productImages(editingProduct.id, productForm.imageUrls, productForm.name),
       };
       updateProduct(updated);
-      const oldUrl = editingProduct.images[0]?.imageUrl;
-      if (oldUrl && oldUrl !== productForm.imageUrl && !imageInUse(oldUrl, editingProduct.id)) deleteUploadedImage(oldUrl);
+      editingProduct.images
+        .map((i) => i.imageUrl)
+        .filter((u) => !productForm.imageUrls.includes(u) && !imageInUse(u, editingProduct.id))
+        .forEach((u) => deleteUploadedImage(u));
     } else {
       addProduct({
         name: productForm.name,
@@ -334,18 +347,7 @@ export const AdminPage: React.FC = () => {
         isActive: productForm.isActive,
         isVariable: productForm.isVariable,
         sortOrder: products.length + 1,
-        images: [
-          {
-            id: `img-${Date.now()}`,
-            productId: `prod-temp`,
-            imageUrl:
-              productForm.imageUrl ||
-              '/images/products/placeholder.webp',
-            altText: productForm.name,
-            sortOrder: 1,
-            isPrimary: true,
-          },
-        ],
+        images: productImages('prod-temp', productForm.imageUrls, productForm.name),
         // Starts as "price on request"; edit its options/prices under Admin → Prices
         optionGroups: tableOptionGroups(`prod-new-${Date.now()}`, {
           rowName: 'Option',
@@ -355,7 +357,7 @@ export const AdminPage: React.FC = () => {
         }),
       });
     }
-    closeProductModal(productForm.imageUrl);
+    closeProductModal(productForm.imageUrls);
   };
 
   const handleDeleteProduct = (productId: string, name: string) => {
@@ -1672,63 +1674,105 @@ export const AdminPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Image URL & Preset Pickers */}
-                  <div className="space-y-1.5 pt-1">
-                    <label className="font-bold text-slate-700">Product Photo</label>
-                    <div className="flex gap-2">
-                      <label
-                        className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-2.5 rounded text-xs font-bold text-white cursor-pointer transition-colors ${
-                          imageUploading ? 'bg-slate-400 pointer-events-none' : 'bg-[#0F1B2D] hover:bg-[#182A45]'
-                        }`}
-                      >
-                        {imageUploading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                        {imageUploading ? 'Uploading…' : 'Upload photo'}
-                        <input type="file" accept="image/*" className="sr-only" onChange={handleUploadProductImage} disabled={imageUploading} />
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="/images/products/... or https://..."
-                        value={productForm.imageUrl}
-                        onChange={(e) => setProductForm({ ...productForm, imageUrl: e.target.value })}
-                        className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden"
-                      />
-                      {productForm.imageUrl && (
-                        <div className="w-10 h-10 rounded border border-slate-300 overflow-hidden shrink-0 bg-slate-100">
-                          <img
-                            src={productForm.imageUrl}
-                            alt="preview"
-                            className="w-full h-full object-cover"
-                          />
+                  {/* Product photos (up to MAX_PRODUCT_PHOTOS; the first is the main photo) */}
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-baseline justify-between">
+                      <label className="font-bold text-slate-700">Product Photos</label>
+                      <span className="text-[10px] text-slate-500">
+                        {productForm.imageUrls.length} of {MAX_PRODUCT_PHOTOS} · first photo is the main one
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {productForm.imageUrls.map((url, i) => (
+                        <div key={url} className="relative aspect-4/3 rounded border border-[#E6E0D6] overflow-hidden bg-slate-100 group">
+                          <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                          {i === 0 ? (
+                            <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-[#0F1B2D] text-white text-[9px] font-bold uppercase">Main</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => makeMainPhoto(url)}
+                              className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-white/90 text-[#0F1B2D] text-[9px] font-bold hover:bg-white"
+                            >
+                              Make main
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeProductPhoto(url)}
+                            aria-label={`Remove photo ${i + 1}`}
+                            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 text-slate-600 hover:text-red-600 flex items-center justify-center"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         </div>
+                      ))}
+                      {!photosFull && (
+                        <label
+                          className={`aspect-4/3 rounded border-2 border-dashed flex flex-col items-center justify-center gap-1 text-[11px] font-semibold cursor-pointer transition-colors ${
+                            imageUploading ? 'border-slate-300 text-slate-400 pointer-events-none' : 'border-[#E6E0D6] text-[#0F1B2D] hover:border-[#0F1B2D]'
+                          }`}
+                        >
+                          {imageUploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                          {imageUploading ? 'Uploading…' : 'Upload photos'}
+                          <input type="file" accept="image/*" multiple className="sr-only" onChange={handleUploadProductImage} disabled={imageUploading} />
+                        </label>
                       )}
                     </div>
+
+                    {photosFull ? (
+                      <p className="text-[11px] text-amber-700">Maximum {MAX_PRODUCT_PHOTOS} photos. Remove one to add another.</p>
+                    ) : (
+                      <>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Or paste an image link: /images/products/... or https://..."
+                            value={photoLink}
+                            onChange={(e) => setPhotoLink(e.target.value)}
+                            className="w-full p-2 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden"
+                          />
+                          <button
+                            type="button"
+                            disabled={!photoLink.trim()}
+                            onClick={() => {
+                              addProductPhoto(photoLink.trim());
+                              setPhotoLink('');
+                            }}
+                            className="shrink-0 px-3 rounded border border-[#0F1B2D] text-[#0F1B2D] font-semibold disabled:opacity-40"
+                          >
+                            Add
+                          </button>
+                        </div>
+                        {/* Real photo presets (files in public/images/products) */}
+                        <div className="flex flex-wrap gap-1.5">
+                          <span className="text-[10px] text-slate-400">Our photos:</span>
+                          {[
+                            ['Visiting Cards', 'visiting-cards/1'],
+                            ['Bill Books', 'bill-books/2'],
+                            ['Leaflets', 'leaflets/4'],
+                            ['Invitations', 'invitations/4'],
+                            ['Letterheads', 'letterheads/1'],
+                            ['Certificates', 'certificates/1'],
+                            ['Stickers', 'stickers/4'],
+                            ['Envelopes', 'envelopes/2'],
+                          ].map(([label, photo]) => (
+                            <button
+                              key={photo}
+                              type="button"
+                              onClick={() => addProductPhoto(`/images/products/${photo}.webp`)}
+                              className="text-[10px] px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700"
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
                     <p className="text-[10px] text-slate-400">
-                      {IMAGE_GUIDE.product.hint} Stored copies are usually under 300 KB, and the old uploaded photo is deleted when you save.
+                      {IMAGE_GUIDE.product.hint} Stored copies are usually under 300 KB, and removed uploads are deleted when you save.
                     </p>
-                    {/* Real photo presets (files in public/images/products) */}
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      <span className="text-[10px] text-slate-400">Our photos:</span>
-                      {[
-                        ['Visiting Cards', 'visiting-cards/1'],
-                        ['Bill Books', 'bill-books/2'],
-                        ['Leaflets', 'leaflets/4'],
-                        ['Invitations', 'invitations/4'],
-                        ['Letterheads', 'letterheads/1'],
-                        ['Certificates', 'certificates/1'],
-                        ['Stickers', 'stickers/4'],
-                        ['Envelopes', 'envelopes/2'],
-                        ['No photo yet', 'placeholder'],
-                      ].map(([label, photo]) => (
-                        <button
-                          key={photo}
-                          type="button"
-                          onClick={() => setProductForm({ ...productForm, imageUrl: `/images/products/${photo}.webp` })}
-                          className="text-[10px] px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700"
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
                   </div>
 
                   {/* Short Description */}
@@ -2248,16 +2292,6 @@ export const AdminPage: React.FC = () => {
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700">TikTok</label>
-              <input
-                type="text"
-                placeholder="https://tiktok.com/yourpage"
-                value={settingsForm.socialLinks.tiktok}
-                onChange={(e) => editSocial({ tiktok: e.target.value })}
-                className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
-              />
-            </div>
 
             <div className="space-y-1">
               <label className="font-bold text-slate-700">LinkedIn</label>
