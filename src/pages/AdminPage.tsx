@@ -773,12 +773,6 @@ export const AdminPage: React.FC = () => {
         </button>
       </div>
 
-      {(activeTab === 'products' || activeTab === 'settings') && (
-        <div className="p-3 bg-amber-50 border border-amber-300 text-amber-900 text-xs rounded">
-          Changes on this tab are saved in this browser only and are not yet stored in the database.
-        </div>
-      )}
-
       {/* ========================================================================= */}
       {/* 1. DASHBOARD OVERVIEW */}
       {/* ========================================================================= */}
