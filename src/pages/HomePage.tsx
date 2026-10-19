@@ -33,8 +33,7 @@ export const HomePage: React.FC = () => {
   return (
     <div className="space-y-16 sm:space-y-24 pb-16">
       {/* 1. HERO SECTION */}
-      {/* Slides up under the see-through header (73px phone / 77px sm+) and fills the first screen on desktop */}
-      <section className="relative bg-[#0F1B2D] text-[#FAF8F5] -mt-[73px] sm:-mt-[77px] pt-[121px] sm:pt-[157px] pb-16 sm:pb-24 overflow-hidden lg:min-h-[calc(100svh-29px)] lg:flex lg:items-center lg:pt-[117px] lg:pb-10">
+      <section className="relative bg-[#0F1B2D] text-[#FAF8F5] pt-12 sm:pt-16 pb-16 sm:pb-20 overflow-hidden lg:min-h-[calc(100svh-120px)] lg:flex lg:items-center lg:py-16">
         {/* Real-photo backdrop that changes with the product slider */}
         <HeroBackdrop slides={heroSlides} index={heroIndex} />
         {/* Subtle Halftone Pattern */}
