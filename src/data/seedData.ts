@@ -1,5 +1,6 @@
 import { Category, Product, SiteSettings, PriceMatrixCell } from '../types';
 import { PRICE_TABLES, tableOptionGroups, tablePriceCells } from './priceTables';
+import { CUSTOMER_LOGOS } from './customerLogos';
 
 export const SRI_LANKA_DISTRICTS = [
   'Colombo',
@@ -52,7 +53,13 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   },
   socialLinks: { facebook: '', instagram: '', youtube: '', tiktok: '', linkedin: '' },
   elfsightReviewsId: '',
-  clientLogos: [],
+  clientLogos: CUSTOMER_LOGOS.map((c, i) => ({
+    id: c.id,
+    companyName: c.name,
+    logoUrl: c.logoUrl,
+    sortOrder: i + 1,
+    isActive: true,
+  })),
   heroBackgrounds: {},
   gtmId: 'GTM-AIPRINT',
   metaPixelId: '494726470920317',

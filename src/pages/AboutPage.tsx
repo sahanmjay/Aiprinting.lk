@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Clock,
@@ -9,10 +9,28 @@ import {
   Printer,
   Layers,
   ArrowRight,
+  Search,
+  Building2,
+  Sparkles,
+  ShieldCheck,
+  Check,
 } from 'lucide-react';
 import { RegistrationMark } from '../components/common/RegistrationMark';
+import { CUSTOMER_LOGOS, LOGO_CATEGORIES } from '../data/customerLogos';
 
 export const AboutPage: React.FC = () => {
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const filteredLogos = useMemo(() => {
+    return CUSTOMER_LOGOS.filter((logo) => {
+      const matchesCategory = selectedCategory === 'All' || logo.category === selectedCategory;
+      const matchesSearch =
+        logo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        logo.category.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [selectedCategory, searchQuery]);
   return (
     <div className="space-y-16 sm:space-y-24 py-10 sm:py-16">
       {/* 1. HERO STORY */}
@@ -164,7 +182,137 @@ export const AboutPage: React.FC = () => {
         </div>
       </section>
 
-      {/* 4. BOTTOM ACTION */}
+      {/* 4. TRUSTED CORPORATE CLIENTS & PARTNERS */}
+      <section id="clients" className="reveal max-w-7xl mx-auto px-4 sm:px-6 space-y-8 scroll-mt-24">
+        {/* Section Header */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[#E6E0D6]">
+          <div className="space-y-3 max-w-2xl text-left">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#1A2D4A]/10 border border-[#1A2D4A]/20 text-xs font-semibold rounded text-[#0F1B2D]">
+              <Building2 className="w-3.5 h-3.5 text-[#009CF0]" />
+              <span>Corporate Partnerships</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#0F1B2D] tracking-tight">
+              Trusted by Sri Lanka's Leading Brands & Institutions
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              Over the years, Ai Printing Solutions has delivered commercial printing, security documents, luxury marketing collateral, and packaging solutions for premier financial institutions, state universities, corporate conglomerates, and global organizations.
+            </p>
+          </div>
+
+          {/* Key Metrics Mini-Card */}
+          <div className="grid grid-cols-2 gap-3 shrink-0">
+            <div className="bg-white p-3.5 rounded-lg border border-[#E6E0D6] shadow-2xs text-left">
+              <div className="text-2xl font-bold text-[#0F1B2D]">60+</div>
+              <div className="text-[11px] text-slate-500 font-medium">Corporate Partners</div>
+            </div>
+            <div className="bg-white p-3.5 rounded-lg border border-[#E6E0D6] shadow-2xs text-left">
+              <div className="text-2xl font-bold text-[#D6342C]">25</div>
+              <div className="text-[11px] text-slate-500 font-medium">Districts Island-Wide</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters & Search Bar */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+          {/* Category Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-2 md:pb-0">
+            {LOGO_CATEGORIES.map((cat) => {
+              const count = cat === 'All' ? CUSTOMER_LOGOS.length : CUSTOMER_LOGOS.filter((l) => l.category === cat).length;
+              const isActive = selectedCategory === cat;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer ${
+                    isActive
+                      ? 'bg-[#0F1B2D] text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:text-[#0F1B2D] border border-[#E6E0D6]'
+                  }`}
+                >
+                  <span>{cat}</span>
+                  <span className={`ml-1.5 text-[10px] ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
+                    ({count})
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search Box */}
+          <div className="relative w-full md:w-64 shrink-0">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search client or brand..."
+              className="w-full pl-9 pr-3 py-1.5 bg-white border border-[#E6E0D6] rounded-lg text-xs placeholder:text-slate-400 focus:outline-none focus:border-[#009CF0] transition-colors"
+            />
+          </div>
+        </div>
+
+        {/* Logos Grid */}
+        {filteredLogos.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+            {filteredLogos.map((logo) => (
+              <div
+                key={logo.id}
+                className="bg-white rounded-xl p-3 sm:p-4 border border-[#E6E0D6] hover:border-[#009CF0]/60 shadow-2xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex flex-col items-center justify-between group cursor-default min-h-[120px] sm:min-h-[140px]"
+                title={`${logo.name} · ${logo.category}`}
+              >
+                <div className="w-full h-14 sm:h-16 flex items-center justify-center p-1">
+                  <img
+                    src={logo.logoUrl}
+                    alt={logo.name}
+                    loading="lazy"
+                    className="max-h-full max-w-full object-contain filter grayscale opacity-75 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300 group-hover:scale-105"
+                  />
+                </div>
+                <div className="w-full text-center mt-2 pt-2 border-t border-slate-100/80">
+                  <span className="block text-[11px] font-bold text-[#0F1B2D] truncate">
+                    {logo.name}
+                  </span>
+                  <span className="block text-[9.5px] text-slate-400 truncate mt-0.5">
+                    {logo.category}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl p-12 border border-[#E6E0D6] text-center space-y-2">
+            <p className="text-sm font-semibold text-slate-700">No client logos matched your search "{searchQuery}"</p>
+            <button
+              onClick={() => { setSelectedCategory('All'); setSearchQuery(''); }}
+              className="text-xs text-[#009CF0] font-semibold hover:underline cursor-pointer"
+            >
+              Reset filters
+            </button>
+          </div>
+        )}
+
+        {/* Corporate Print Account CTA Card */}
+        <div className="bg-[#FAF8F5] border border-[#E6E0D6] rounded-xl p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="space-y-1 text-center md:text-left">
+            <h3 className="text-base sm:text-lg font-bold text-[#0F1B2D]">
+              Looking for a dedicated commercial print partner for your business?
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600">
+              We offer volume pricing agreements, pre-approved digital proof workflows, and priority island-wide courier dispatch for ongoing corporate clients.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <Link
+              to="/quote"
+              className="px-5 py-2.5 bg-[#D6342C] hover:bg-[#B8251E] text-white font-bold text-xs rounded transition-colors shadow-sm"
+            >
+              Request Corporate Quote
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. BOTTOM ACTION */}
       <section className="reveal max-w-7xl mx-auto px-4 sm:px-6 text-center space-y-4">
         <h3 className="text-xl sm:text-2xl font-bold text-[#0F1B2D]">
           Ready to partner with Sri Lanka's dedicated commercial print facility?

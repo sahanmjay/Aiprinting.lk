@@ -117,6 +117,7 @@ const withDefaults = (saved: Partial<SiteSettings>): SiteSettings => ({
   ...saved,
   bankDetails: { ...DEFAULT_SITE_SETTINGS.bankDetails, ...saved.bankDetails },
   socialLinks: { ...DEFAULT_SITE_SETTINGS.socialLinks, ...saved.socialLinks },
+  clientLogos: saved.clientLogos && saved.clientLogos.length > 0 ? saved.clientLogos : DEFAULT_SITE_SETTINGS.clientLogos,
 });
 
 // Staff's saved product list wins; built-in products added later (never saved or deleted by staff) are appended.

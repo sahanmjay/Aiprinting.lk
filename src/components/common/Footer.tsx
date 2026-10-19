@@ -19,7 +19,7 @@ export const Footer: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <img src={logoMark} alt="" width={36} height={36} className="w-9 h-9 rounded-lg" />
-              <span className="font-bold text-xl tracking-wide [word-spacing:0.25em] text-white">
+              <span className="font-bold text-xl tracking-wide text-white">
                 Ai Printing Solutions<span className="text-[#D6342C]">.</span>
               </span>
             </div>

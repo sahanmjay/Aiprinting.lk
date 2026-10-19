@@ -20,6 +20,7 @@ import { GoogleReviews } from '../components/home/GoogleReviews';
 import { getWhatsAppUrl } from '../lib/formatters';
 import { FlowButton } from '../components/ui/flow-button';
 import { HeroBackdrop, HeroProductSlider, useHeroSlider, useHeroSlides } from '../components/home/HeroShowcase';
+import { CustomerLogoMarquee } from '../components/home/CustomerLogoMarquee';
 
 export const HomePage: React.FC = () => {
   const { categories, products, siteSettings, getFromPrice } = useStore();
@@ -98,6 +99,9 @@ export const HomePage: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* INFINITE CUSTOMER LOGO MARQUEE BAR */}
+      <CustomerLogoMarquee />
 
       {/* 2. THREE VALUE PROPS */}
       <section className="reveal max-w-7xl mx-auto px-4 sm:px-6">
