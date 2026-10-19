@@ -34,8 +34,8 @@ import { formatLKR, formatItemPrice, getWhatsAppUrl } from '../lib/formatters';
 import { openStoredFile, downloadStoredFile, uploadImage, deleteUploadedImage, IMAGE_GUIDE } from '../lib/supabase';
 import { HERO_SLIDES } from '../components/home/HeroShowcase';
 import { DEFAULT_SITE_SETTINGS } from '../data/seedData';
-import { tableOptionGroups } from '../data/priceTables';
-import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product, SiteSettings, SocialLinks } from '../types';
+import { tableOptionGroups, optionId } from '../data/priceTables';
+import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product, SiteSettings, SocialLinks, OptionValue } from '../types';
 
 const MAX_PRODUCT_PHOTOS = 4;
 
@@ -139,6 +139,13 @@ export const AdminPage: React.FC = () => {
   const [gridSaveToast, setGridSaveToast] = useState<boolean>(false);
   const [csvUploadText, setCsvUploadText] = useState<string>('');
   const [showCsvModal, setShowCsvModal] = useState<boolean>(false);
+  const [showAddStock, setShowAddStock] = useState(false);
+  const [newStockLabel, setNewStockLabel] = useState('');
+  const [newStockFinish, setNewStockFinish] = useState<'auto' | 'gloss' | 'matte' | 'metallic' | 'ribbed' | 'standard'>('auto');
+  const [alsoSyncSingleSidedStock, setAlsoSyncSingleSidedStock] = useState(true);
+  const [showAddQty, setShowAddQty] = useState(false);
+  const [newQtyLabel, setNewQtyLabel] = useState('');
+  const [alsoSyncSingleSidedQty, setAlsoSyncSingleSidedQty] = useState(true);
 
   // Site Settings Tab State
   const [settingsForm, setSettingsForm] = useState(siteSettings);
@@ -573,6 +580,198 @@ export const AdminPage: React.FC = () => {
         updatePriceCell(selectedGridProduct, activeRowId, col.id, Math.round((price * (1 + bulkPercentInput / 100)) / 50) * 50);
       }
     }
+    setPricesDirty(true);
+  };
+
+  const handleAddPaperStock = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!gridProduct || !gridProduct.optionGroups?.[0]) return;
+    const label = newStockLabel.trim();
+    if (!label) {
+      alert('Please enter a paper stock name.');
+      return;
+    }
+    if (gridRows.some((r) => r.label.toLowerCase() === label.toLowerCase())) {
+      alert(`A paper stock named "${label}" already exists.`);
+      return;
+    }
+
+    let id = optionId(label);
+    if (!id) id = `stock-${Date.now()}`;
+    if (gridRows.some((r) => r.id === id)) {
+      id = `${id}-${Date.now().toString().slice(-4)}`;
+    }
+
+    const finishType =
+      newStockFinish === 'auto'
+        ? (/metallic/i.test(label)
+            ? 'metallic'
+            : /matt/i.test(label)
+            ? 'matte'
+            : /gloss/i.test(label)
+            ? 'gloss'
+            : /laid|ribbed|vellum/i.test(label)
+            ? 'ribbed'
+            : undefined)
+        : newStockFinish === 'standard'
+        ? undefined
+        : newStockFinish;
+
+    const newOption: OptionValue = {
+      id,
+      groupId: gridProduct.optionGroups[0].id,
+      label,
+      sortOrder: gridRows.length + 1,
+      isActive: true,
+      finishType,
+    };
+
+    const updatedGroups = [...gridProduct.optionGroups];
+    updatedGroups[0] = {
+      ...updatedGroups[0],
+      values: [...updatedGroups[0].values, newOption],
+    };
+
+    updateProduct({
+      ...gridProduct,
+      optionGroups: updatedGroups,
+    });
+
+    if (alsoSyncSingleSidedStock && selectedGridProduct === 'prod-vc-double') {
+      const singleProduct = products.find((p) => p.id === 'prod-vc-single');
+      if (singleProduct?.optionGroups?.[0]) {
+        const singleGroups = [...singleProduct.optionGroups];
+        const singleRows = singleGroups[0].values ?? [];
+        if (!singleRows.some((r) => r.label.toLowerCase() === label.toLowerCase())) {
+          singleGroups[0] = {
+            ...singleGroups[0],
+            values: [...singleRows, { ...newOption, groupId: singleGroups[0].id }],
+          };
+          updateProduct({ ...singleProduct, optionGroups: singleGroups });
+        }
+      }
+    }
+
+    setGridPaperId(id);
+    setNewStockLabel('');
+    setShowAddStock(false);
+    setPricesDirty(true);
+  };
+
+  const handleDeletePaperStock = (rowId: string, rowLabel: string) => {
+    if (!gridProduct || !gridProduct.optionGroups?.[0]) return;
+    if (gridRows.length <= 1) {
+      alert('A product must have at least one stock option.');
+      return;
+    }
+    if (
+      !confirm(
+        `Are you sure you want to remove paper stock "${rowLabel}"?\nAny configured prices for this stock will be permanently removed.`
+      )
+    ) {
+      return;
+    }
+
+    const updatedGroups = [...gridProduct.optionGroups];
+    const newValues = updatedGroups[0].values.filter((v) => v.id !== rowId);
+    updatedGroups[0] = {
+      ...updatedGroups[0],
+      values: newValues,
+    };
+
+    updateProduct({
+      ...gridProduct,
+      optionGroups: updatedGroups,
+    });
+
+    if (activeRowId === rowId) {
+      setGridPaperId(newValues[0]?.id ?? '');
+    }
+    setPricesDirty(true);
+  };
+
+  const handleAddQuantityTier = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!gridProduct || !gridProduct.optionGroups?.[1]) return;
+    const label = newQtyLabel.trim();
+    if (!label) {
+      alert('Please enter a card set / quantity label (e.g. 6,000 Cards).');
+      return;
+    }
+    if (gridCols.some((c) => c.label.toLowerCase() === label.toLowerCase())) {
+      alert(`A card set / quantity option named "${label}" already exists.`);
+      return;
+    }
+
+    let id = optionId(label);
+    if (!id) id = `qty-${Date.now()}`;
+    if (gridCols.some((c) => c.id === id)) {
+      id = `${id}-${Date.now().toString().slice(-4)}`;
+    }
+
+    const newOption: OptionValue = {
+      id,
+      groupId: gridProduct.optionGroups[1].id,
+      label,
+      sortOrder: gridCols.length + 1,
+      isActive: true,
+    };
+
+    const updatedGroups = [...gridProduct.optionGroups];
+    updatedGroups[1] = {
+      ...updatedGroups[1],
+      values: [...updatedGroups[1].values, newOption],
+    };
+
+    updateProduct({
+      ...gridProduct,
+      optionGroups: updatedGroups,
+    });
+
+    if (alsoSyncSingleSidedQty && selectedGridProduct === 'prod-vc-double') {
+      const singleProduct = products.find((p) => p.id === 'prod-vc-single');
+      if (singleProduct?.optionGroups?.[1]) {
+        const singleGroups = [...singleProduct.optionGroups];
+        const singleCols = singleGroups[1].values ?? [];
+        if (!singleCols.some((c) => c.label.toLowerCase() === label.toLowerCase())) {
+          singleGroups[1] = {
+            ...singleGroups[1],
+            values: [...singleCols, { ...newOption, groupId: singleGroups[1].id }],
+          };
+          updateProduct({ ...singleProduct, optionGroups: singleGroups });
+        }
+      }
+    }
+
+    setNewQtyLabel('');
+    setShowAddQty(false);
+    setPricesDirty(true);
+  };
+
+  const handleDeleteQuantityTier = (colId: string, colLabel: string) => {
+    if (!gridProduct || !gridProduct.optionGroups?.[1]) return;
+    if (gridCols.length <= 1) {
+      alert('A product must have at least one quantity / card set tier.');
+      return;
+    }
+    if (
+      !confirm(
+        `Are you sure you want to remove "${colLabel}"?\nAny configured prices for this tier will be removed.`
+      )
+    ) {
+      return;
+    }
+
+    const updatedGroups = [...gridProduct.optionGroups];
+    updatedGroups[1] = {
+      ...updatedGroups[1],
+      values: updatedGroups[1].values.filter((v) => v.id !== colId),
+    };
+
+    updateProduct({
+      ...gridProduct,
+      optionGroups: updatedGroups,
+    });
     setPricesDirty(true);
   };
 
@@ -1236,41 +1435,208 @@ export const AdminPage: React.FC = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             {/* Step 1: first option (paper / size ...) */}
-            <div className="lg:col-span-4 bg-white rounded-lg border border-[#E6E0D6] shadow-xs overflow-hidden">
-              <div className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-[#E6E0D6]">
-                1. Choose {gridProduct?.optionGroups?.[0]?.name ?? 'option'}
+            <div className="lg:col-span-4 bg-white rounded-lg border border-[#E6E0D6] shadow-xs overflow-hidden flex flex-col">
+              <div className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-[#E6E0D6] flex justify-between items-center bg-[#FAF8F5]">
+                <span>1. Choose {gridProduct?.optionGroups?.[0]?.name ?? 'option'} ({gridRows.length})</span>
+                <button
+                  type="button"
+                  onClick={() => setShowAddStock(!showAddStock)}
+                  className="px-2 py-1 text-[11px] font-bold text-[#0F1B2D] hover:bg-[#E6E0D6]/60 rounded flex items-center gap-1 transition-colors"
+                  title="Add new paper stock"
+                >
+                  <Plus className="w-3.5 h-3.5 text-[#D6342C]" />
+                  <span>{showAddStock ? 'Close' : 'Add Stock'}</span>
+                </button>
               </div>
-              {gridRows.map((row) => {
-                const isSelected = activeRowId === row.id;
-                const from = rowFromPrice(row.id);
-                return (
-                  <button
-                    key={row.id}
-                    onClick={() => setGridPaperId(row.id)}
-                    className={`w-full text-left px-4 py-2.5 text-xs border-b border-[#F0EBE1] last:border-0 flex justify-between items-center gap-3 transition-colors ${
-                      isSelected ? 'bg-[#0F1B2D] text-white' : 'text-[#0F1B2D] hover:bg-[#FAF8F5]'
-                    }`}
-                  >
-                    <span className="font-semibold">{row.label}</span>
-                    <span className={`shrink-0 text-[11px] ${isSelected ? 'text-slate-300' : 'text-slate-400'}`}>
-                      {from != null ? `from ${formatLKR(from)}` : 'no prices'}
-                    </span>
-                  </button>
-                );
-              })}
+
+              {/* Add Stock Form */}
+              {showAddStock && (
+                <form
+                  onSubmit={handleAddPaperStock}
+                  className="p-3 bg-amber-50/50 border-b border-amber-200/70 space-y-2 text-xs"
+                >
+                  <div className="font-bold text-[#0F1B2D] text-[11px] flex items-center gap-1">
+                    <Plus className="w-3.5 h-3.5 text-[#D6342C]" />
+                    <span>Add New {gridProduct?.optionGroups?.[0]?.name ?? 'Paper Stock'}</span>
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="e.g. 350gsm Pearl White (Metallic Finish)"
+                      value={newStockLabel}
+                      onChange={(e) => setNewStockLabel(e.target.value)}
+                      className="w-full p-2 text-xs bg-white border border-[#E6E0D6] rounded focus:border-[#0F1B2D] outline-hidden font-medium"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-slate-500 block mb-0.5">Finish type</label>
+                      <select
+                        value={newStockFinish}
+                        onChange={(e) => setNewStockFinish(e.target.value as any)}
+                        className="w-full p-1.5 text-xs bg-white border border-[#E6E0D6] rounded font-medium"
+                      >
+                        <option value="auto">Auto-detect from name</option>
+                        <option value="gloss">Gloss</option>
+                        <option value="matte">Matte</option>
+                        <option value="metallic">Metallic</option>
+                        <option value="ribbed">Ribbed / Textured</option>
+                        <option value="standard">Standard / Uncoated</option>
+                      </select>
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="submit"
+                        className="w-full py-1.5 px-3 bg-[#0F1B2D] hover:bg-[#182A45] text-white font-bold text-xs rounded transition-colors"
+                      >
+                        Add to List
+                      </button>
+                    </div>
+                  </div>
+                  {selectedGridProduct === 'prod-vc-double' && (
+                    <label className="flex items-center gap-1.5 text-[11px] text-slate-600 pt-0.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={alsoSyncSingleSidedStock}
+                        onChange={(e) => setAlsoSyncSingleSidedStock(e.target.checked)}
+                        className="rounded border-[#E6E0D6] text-[#0F1B2D]"
+                      />
+                      <span>Also add to Single Sided Visiting Cards</span>
+                    </label>
+                  )}
+                </form>
+              )}
+
+              {/* Rows List */}
+              <div className="divide-y divide-[#F0EBE1] overflow-y-auto max-h-[520px]">
+                {gridRows.map((row) => {
+                  const isSelected = activeRowId === row.id;
+                  const from = rowFromPrice(row.id);
+                  return (
+                    <div
+                      key={row.id}
+                      className={`group w-full text-left px-3.5 py-2.5 text-xs flex justify-between items-center gap-2 transition-colors cursor-pointer ${
+                        isSelected ? 'bg-[#0F1B2D] text-white' : 'text-[#0F1B2D] hover:bg-[#FAF8F5]'
+                      }`}
+                      onClick={() => setGridPaperId(row.id)}
+                    >
+                      <span className="font-semibold truncate flex-1">{row.label}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-[11px] ${isSelected ? 'text-slate-300' : 'text-slate-400'}`}>
+                          {from != null ? `from ${formatLKR(from)}` : 'no prices'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeletePaperStock(row.id, row.label);
+                          }}
+                          title={`Delete ${row.label}`}
+                          className={`opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/20 transition-opacity ${
+                            isSelected ? 'text-red-300 hover:text-red-100' : 'text-slate-400 hover:text-red-600'
+                          }`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Bottom Quick-Add Trigger */}
+              {!showAddStock && (
+                <button
+                  type="button"
+                  onClick={() => setShowAddStock(true)}
+                  className="w-full p-2.5 bg-[#FAF8F5] hover:bg-[#F0EBE1] text-[#0F1B2D] font-bold text-xs border-t border-[#E6E0D6] flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5 text-[#D6342C]" />
+                  <span>+ Add New {gridProduct?.optionGroups?.[0]?.name ?? 'Paper Stock'}</span>
+                </button>
+              )}
             </div>
 
             {/* Step 2: prices for that option */}
             <div className="lg:col-span-8 bg-white rounded-lg border border-[#E6E0D6] shadow-xs overflow-hidden">
-              <div className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-[#E6E0D6]">
-                2. Set prices — {gridRows.find((r) => r.id === activeRowId)?.label}
+              <div className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-[#E6E0D6] flex justify-between items-center bg-[#FAF8F5]">
+                <span className="truncate pr-2">2. Set prices — {gridRows.find((r) => r.id === activeRowId)?.label}</span>
+                <button
+                  type="button"
+                  onClick={() => setShowAddQty(!showAddQty)}
+                  className="px-2 py-1 text-[11px] font-bold text-[#0F1B2D] hover:bg-[#E6E0D6]/60 rounded flex items-center gap-1 transition-colors shrink-0"
+                  title="Add new card set / quantity tier"
+                >
+                  <Plus className="w-3.5 h-3.5 text-[#D6342C]" />
+                  <span>{showAddQty ? 'Close' : 'Add Card Set / Quantity'}</span>
+                </button>
               </div>
+
+              {/* Add Quantity / Card Set Form */}
+              {showAddQty && (
+                <form
+                  onSubmit={handleAddQuantityTier}
+                  className="p-3 bg-amber-50/50 border-b border-amber-200/70 space-y-2 text-xs"
+                >
+                  <div className="font-bold text-[#0F1B2D] text-[11px] flex items-center gap-1">
+                    <Plus className="w-3.5 h-3.5 text-[#D6342C]" />
+                    <span>Add New {gridProduct?.optionGroups?.[1]?.name ?? 'Card Set / Quantity'} Tier</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. 6,000 Cards or 10,000 Cards"
+                      value={newQtyLabel}
+                      onChange={(e) => setNewQtyLabel(e.target.value)}
+                      className="flex-1 p-2 text-xs bg-white border border-[#E6E0D6] rounded focus:border-[#0F1B2D] outline-hidden font-medium"
+                      autoFocus
+                    />
+                    <button
+                      type="submit"
+                      className="py-2 px-4 bg-[#0F1B2D] hover:bg-[#182A45] text-white font-bold text-xs rounded transition-colors whitespace-nowrap"
+                    >
+                      Add Tier
+                    </button>
+                  </div>
+                  {/* Suggestions for quick adding */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[10px] text-slate-500">Quick suggestions:</span>
+                    {['6,000 Cards', '7,000 Cards', '8,000 Cards', '10,000 Cards', '50 Cards', '250 Cards', '15,000 Cards']
+                      .filter((s) => !gridCols.some((c) => c.label.toLowerCase() === s.toLowerCase()))
+                      .slice(0, 5)
+                      .map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          onClick={() => setNewQtyLabel(suggestion)}
+                          className="px-2 py-0.5 bg-white border border-[#E6E0D6] hover:border-[#0F1B2D] rounded text-[10px] font-medium text-slate-700"
+                        >
+                          + {suggestion}
+                        </button>
+                      ))}
+                  </div>
+                  {selectedGridProduct === 'prod-vc-double' && (
+                    <label className="flex items-center gap-1.5 text-[11px] text-slate-600 pt-0.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={alsoSyncSingleSidedQty}
+                        onChange={(e) => setAlsoSyncSingleSidedQty(e.target.checked)}
+                        className="rounded border-[#E6E0D6] text-[#0F1B2D]"
+                      />
+                      <span>Also add to Single Sided Visiting Cards</span>
+                    </label>
+                  )}
+                </form>
+              )}
+
               <table className="w-full text-xs">
                 <thead className="text-[10px] uppercase text-slate-500 bg-[#FAF8F5]">
                   <tr>
                     <th className="px-4 py-2 text-left">{gridProduct?.optionGroups?.[1]?.name ?? 'Quantity'}</th>
                     <th className="px-4 py-2 text-left">Price (Rs.)</th>
                     <th className="px-4 py-2 text-right">Per unit</th>
+                    <th className="px-2 py-2 text-center w-10"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1278,7 +1644,7 @@ export const AdminPage: React.FC = () => {
                     const price = gridPrice(activeRowId, col.id);
                     const units = unitCount(col.label);
                     return (
-                      <tr key={col.id} className="hover:bg-[#FAF8F5]">
+                      <tr key={col.id} className="hover:bg-[#FAF8F5] group">
                         <td className="px-4 py-1.5 font-semibold text-[#0F1B2D]">{col.label}</td>
                         <td className="px-4 py-1.5">
                           <input
@@ -1297,11 +1663,36 @@ export const AdminPage: React.FC = () => {
                         <td className="px-4 py-1.5 text-right text-slate-500">
                           {price != null && units > 0 ? formatLKR(price / units) : '—'}
                         </td>
+                        <td className="px-2 py-1.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteQuantityTier(col.id, col.label)}
+                            title={`Delete ${col.label}`}
+                            className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 p-1 rounded transition-opacity"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+
+              {/* Bottom Quick-Add for Quantity / Card Set */}
+              {!showAddQty && (
+                <div className="px-4 py-2.5 bg-[#FAF8F5]/80 border-t border-[#E6E0D6] flex justify-between items-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddQty(true)}
+                    className="text-xs font-bold text-[#D6342C] hover:underline flex items-center gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Add New {gridProduct?.optionGroups?.[1]?.name ?? 'Card Set / Quantity'} Tier</span>
+                  </button>
+                  <span className="text-[10px] text-slate-400">Total {gridCols.length} quantity tiers</span>
+                </div>
+              )}
 
               {/* Quick percentage change */}
               <div className="p-4 border-t border-[#E6E0D6] bg-[#FAF8F5] flex flex-wrap items-center gap-2 text-xs">
