@@ -19,7 +19,7 @@ export const CustomerLogoMarquee: React.FC = () => {
         src={logo.logoUrl}
         alt={logo.name}
         loading="lazy"
-        className="max-h-8 sm:max-h-10 max-w-[105px] sm:max-w-[125px] w-auto h-auto object-contain filter grayscale opacity-75 group-hover/card:grayscale-0 group-hover/card:opacity-100 transition-all duration-300 group-hover/card:scale-105"
+        className="max-h-8 sm:max-h-10 max-w-[105px] sm:max-w-[125px] w-auto h-auto object-contain transition-all duration-300 group-hover/card:scale-105"
       />
     </div>
   );

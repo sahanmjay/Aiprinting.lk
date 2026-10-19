@@ -349,7 +349,7 @@ export const HomePage: React.FC = () => {
                   alt={logo.companyName}
                   title={logo.companyName}
                   loading="lazy"
-                  className="max-h-full max-w-full object-contain grayscale opacity-75 hover:grayscale-0 hover:opacity-100 transition"
+                  className="max-h-full max-w-full object-contain transition-all duration-300 hover:scale-105"
                 />
               </li>
             ))}

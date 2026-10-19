@@ -265,7 +265,7 @@ export const AboutPage: React.FC = () => {
                     src={logo.logoUrl}
                     alt={logo.name}
                     loading="lazy"
-                    className="max-h-full max-w-full object-contain filter grayscale opacity-75 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300 group-hover:scale-105"
+                    className="max-h-full max-w-full object-contain transition-all duration-300 group-hover:scale-105"
                   />
                 </div>
                 <div className="w-full text-center mt-2 pt-2 border-t border-slate-100/80">
