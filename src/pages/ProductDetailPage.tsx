@@ -96,7 +96,9 @@ export const ProductDetailPage: React.FC = () => {
     return getPriceForOptions(product.id, paperId, qtyId);
   }, [product, paperId, qtyId, getPriceForOptions]);
 
-  const designFee = artworkType === 'design' ? 500 : 0;
+  const productArtworkFee = product.artworkFee ?? siteSettings.defaultArtworkFee ?? 500;
+  const allowsArtworkDesign = product.hasArtworkOption !== false;
+  const designFee = allowsArtworkDesign && artworkType === 'design' ? productArtworkFee : 0;
   const totalPrice = baseOptionPrice + designFee;
   const unitPrice = quantityCount > 0 ? totalPrice / quantityCount : 0;
 
@@ -172,13 +174,13 @@ export const ProductDetailPage: React.FC = () => {
       unitPrice,
       itemPrice: baseOptionPrice,
       selectedAddons:
-        artworkType === 'design'
+        allowsArtworkDesign && artworkType === 'design'
           ? [
               {
                 id: 'addon-design',
                 productId: product.id,
                 name: 'Professional Artwork Design',
-                price: 500,
+                price: productArtworkFee,
                 isDefault: false,
                 description: 'In-house graphic design layout',
               },
@@ -201,17 +203,21 @@ export const ProductDetailPage: React.FC = () => {
     if (sides) details.push(`Printing: ${SIDES_LABEL[sides]}`);
     if (paperGroup && selectedPaper) details.push(`${paperGroup.name}: ${selectedPaper.label}`);
     if (product.sizeNote) details.push(product.sizeNote);
-    details.push(artworkType === 'design' ? 'Artwork: designed by Ai Printing' : 'Artwork: supplied by customer (print-ready)');
+    details.push(
+      allowsArtworkDesign && artworkType === 'design'
+        ? 'Artwork: designed by Ai Printing'
+        : 'Artwork: supplied by customer (print-ready)'
+    );
 
     const lines: QuotationLine[] = [
       { description: product.name, details, quantity: selectedQty?.label ?? '1', amount: isPriced ? baseOptionPrice : undefined },
     ];
-    if (artworkType === 'design') {
+    if (allowsArtworkDesign && artworkType === 'design') {
       lines.push({
         description: 'Professional Artwork Design',
         details: ['In-house layout design with digital PDF proof'],
         quantity: '1',
-        amount: isPriced ? designFee : undefined,
+        amount: isPriced ? productArtworkFee : undefined,
       });
     }
 
@@ -234,12 +240,18 @@ export const ProductDetailPage: React.FC = () => {
     if (sides) msg += `*Printing:* ${SIDES_LABEL[sides]}\n`;
     if (paperGroup && selectedPaper) msg += `*${paperGroup.name}:* ${selectedPaper.label}\n`;
     if (qtyGroup && selectedQty) msg += `*${qtyGroup.name}:* ${selectedQty.label}\n`;
-    msg += `*Artwork Option:* ${artworkType === 'design' ? 'Design it for me (+Rs. 500)' : 'I have artwork'}\n`;
+    if (allowsArtworkDesign) {
+      msg += `*Artwork Option:* ${
+        artworkType === 'design'
+          ? `Design it for me (+${formatLKR(productArtworkFee)})`
+          : 'I have artwork'
+      }\n`;
+    }
     if (isPriced) msg += `*Estimated Total:* ${formatLKR(totalPrice)} (excl. delivery)\n`;
     if (specialInstructions) msg += `*Notes:* ${specialInstructions}\n`;
     msg += `\nPlease confirm production turnaround. Thank you!`;
     return msg;
-  }, [product, sides, paperGroup, qtyGroup, selectedPaper, selectedQty, artworkType, totalPrice, specialInstructions, isPriced]);
+  }, [product, sides, paperGroup, qtyGroup, selectedPaper, selectedQty, artworkType, totalPrice, specialInstructions, isPriced, allowsArtworkDesign, productArtworkFee]);
 
   // Related products
   const relatedProducts = products
@@ -491,52 +503,56 @@ export const ProductDetailPage: React.FC = () => {
             )}
 
             {/* Artwork Radio Selection */}
-            <div className="space-y-2 pt-1">
-              <span className="block text-xs font-bold text-[#0F1B2D]">
-                {step(3)}. Artwork Preparation:
-              </span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <label
-                  className={`p-3 rounded border text-xs cursor-pointer flex items-center justify-between transition-all ${
-                    artworkType === 'own'
-                      ? 'border-[#0F1B2D] bg-[#0F1B2D]/5 font-semibold text-[#0F1B2D]'
-                      : 'border-[#E6E0D6] text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="artworkChoice"
-                      checked={artworkType === 'own'}
-                      onChange={() => setArtworkType('own')}
-                      className="accent-[#0F1B2D]"
-                    />
-                    <span>I have print-ready artwork</span>
-                  </div>
-                  <span className="text-slate-500 font-bold">Rs. 0</span>
-                </label>
+            {allowsArtworkDesign ? (
+              <div className="space-y-2 pt-1">
+                <span className="block text-xs font-bold text-[#0F1B2D]">
+                  {step(3)}. Artwork Preparation:
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <label
+                    className={`p-3 rounded border text-xs cursor-pointer flex items-center justify-between transition-all ${
+                      artworkType === 'own'
+                        ? 'border-[#0F1B2D] bg-[#0F1B2D]/5 font-semibold text-[#0F1B2D]'
+                        : 'border-[#E6E0D6] text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="artworkChoice"
+                        checked={artworkType === 'own'}
+                        onChange={() => setArtworkType('own')}
+                        className="accent-[#0F1B2D]"
+                      />
+                      <span>I have print-ready artwork</span>
+                    </div>
+                    <span className="text-slate-500 font-bold">Rs. 0</span>
+                  </label>
 
-                <label
-                  className={`p-3 rounded border text-xs cursor-pointer flex items-center justify-between transition-all ${
-                    artworkType === 'design'
-                      ? 'border-[#D6342C] bg-[#D6342C]/5 font-semibold text-[#D6342C]'
-                      : 'border-[#E6E0D6] text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="artworkChoice"
-                      checked={artworkType === 'design'}
-                      onChange={() => setArtworkType('design')}
-                      className="accent-[#D6342C]"
-                    />
-                    <span>Design it for me</span>
-                  </div>
-                  <span className="font-bold text-[#D6342C]">+Rs. 500</span>
-                </label>
+                  <label
+                    className={`p-3 rounded border text-xs cursor-pointer flex items-center justify-between transition-all ${
+                      artworkType === 'design'
+                        ? 'border-[#D6342C] bg-[#D6342C]/5 font-semibold text-[#D6342C]'
+                        : 'border-[#E6E0D6] text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="artworkChoice"
+                        checked={artworkType === 'design'}
+                        onChange={() => setArtworkType('design')}
+                        className="accent-[#D6342C]"
+                      />
+                      <span>Design it for me</span>
+                    </div>
+                    <span className="font-bold text-[#D6342C]">
+                      {productArtworkFee > 0 ? `+${formatLKR(productArtworkFee)}` : 'Free'}
+                    </span>
+                  </label>
+                </div>
               </div>
-            </div>
+            ) : null}
 
             {/* FILE UPLOAD (Dual Slots, max 128MB, progress & preview) */}
             {artworkType === 'own' && (

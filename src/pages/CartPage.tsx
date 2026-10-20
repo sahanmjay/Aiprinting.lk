@@ -106,7 +106,11 @@ export const CartPage: React.FC = () => {
                 <span className="bg-white px-2.5 py-1 rounded border border-slate-200 text-slate-700">
                   <strong className="text-[#0F1B2D]">Artwork:</strong>{' '}
                   {item.artworkType === 'design'
-                    ? 'Design Service (+Rs. 500)'
+                    ? `Design Service (+${formatLKR(
+                        item.selectedAddons?.find((a) => a.id === 'addon-design')?.price ??
+                          item.product?.artworkFee ??
+                          500
+                      )})`
                     : `${item.artworkFiles.length} file(s) attached`}
                 </span>
               </div>

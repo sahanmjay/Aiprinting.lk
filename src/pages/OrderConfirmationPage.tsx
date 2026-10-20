@@ -173,7 +173,11 @@ export const OrderConfirmationPage: React.FC = () => {
                 </div>
                 <div className="text-[11px] text-slate-500">
                   {item.artworkType === 'design'
-                    ? 'Artwork Design Service (+Rs. 500)'
+                    ? `Artwork Design Service (+${formatLKR(
+                        item.selectedAddons?.find((a) => a.id === 'addon-design')?.price ??
+                          item.product?.artworkFee ??
+                          500
+                      )})`
                     : `${item.artworkFiles.length} file(s) attached`}
                 </div>
               </div>

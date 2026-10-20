@@ -76,6 +76,8 @@ export interface Product {
   optionGroups?: OptionGroup[];
   addons?: Addon[];
   specs?: Record<string, string>;
+  artworkFee?: number; // fee added when customer selects "Design it for me" (defaults to 500)
+  hasArtworkOption?: boolean; // whether to offer "Design it for me" option on this product (defaults to true)
 }
 
 export interface CartItemOption {
@@ -228,6 +230,7 @@ export interface SiteSettings {
   hoursSaturday: string;
   hoursSunday: string;
   deliveryFee: number;
+  defaultArtworkFee?: number; // store-wide default fee for "Design it for me" (defaults to 500)
   announcementText: string;
   bankDetails: {
     bankName: string;

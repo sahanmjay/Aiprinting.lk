@@ -43,6 +43,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   hoursSaturday: 'Saturday: 8.30 AM – 1.00 PM',
   hoursSunday: 'Sunday: Closed',
   deliveryFee: 400,
+  defaultArtworkFee: 500,
   announcementText: 'Island-wide delivery in 1–2 days · Free proofing check on all orders',
   bankDetails: {
     bankName: 'Commercial Bank of Ceylon',

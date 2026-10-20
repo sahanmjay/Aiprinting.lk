@@ -28,6 +28,11 @@ import {
   Mail,
   RefreshCw,
   MessageCircle,
+  ChevronUp,
+  ChevronDown,
+  GripVertical,
+  ArrowUpDown,
+  Palette,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatLKR, formatItemPrice, getWhatsAppUrl } from '../lib/formatters';
@@ -142,10 +147,18 @@ export const AdminPage: React.FC = () => {
   const [showAddStock, setShowAddStock] = useState(false);
   const [newStockLabel, setNewStockLabel] = useState('');
   const [newStockFinish, setNewStockFinish] = useState<'auto' | 'gloss' | 'matte' | 'metallic' | 'ribbed' | 'standard'>('auto');
+  const [newStockAtTop, setNewStockAtTop] = useState(false);
   const [alsoSyncSingleSidedStock, setAlsoSyncSingleSidedStock] = useState(true);
   const [showAddQty, setShowAddQty] = useState(false);
   const [newQtyLabel, setNewQtyLabel] = useState('');
+  const [autoSortNewQty, setAutoSortNewQty] = useState(true);
   const [alsoSyncSingleSidedQty, setAlsoSyncSingleSidedQty] = useState(true);
+
+  // Drag-and-drop state for paper stocks and quantity tiers
+  const [draggedRowIndex, setDraggedRowIndex] = useState<number | null>(null);
+  const [dragOverRowIndex, setDragOverRowIndex] = useState<number | null>(null);
+  const [draggedColIndex, setDraggedColIndex] = useState<number | null>(null);
+  const [dragOverColIndex, setDragOverColIndex] = useState<number | null>(null);
 
   // Site Settings Tab State
   const [settingsForm, setSettingsForm] = useState(siteSettings);
@@ -212,6 +225,8 @@ export const AdminPage: React.FC = () => {
     isFeatured: false,
     isActive: true,
     isVariable: true,
+    artworkFee: 500,
+    hasArtworkOption: true,
   });
 
   // Photos uploaded while the editor is open; the ones not kept are removed again to save Storage space
@@ -279,6 +294,8 @@ export const AdminPage: React.FC = () => {
       isFeatured: false,
       isActive: true,
       isVariable: true,
+      artworkFee: siteSettings.defaultArtworkFee ?? 500,
+      hasArtworkOption: true,
     });
     setIsProductModalOpen(true);
   };
@@ -299,6 +316,8 @@ export const AdminPage: React.FC = () => {
       isFeatured: p.isFeatured,
       isActive: p.isActive,
       isVariable: p.isVariable,
+      artworkFee: p.artworkFee ?? siteSettings.defaultArtworkFee ?? 500,
+      hasArtworkOption: p.hasArtworkOption ?? true,
     });
     setIsProductModalOpen(true);
   };
@@ -331,6 +350,8 @@ export const AdminPage: React.FC = () => {
         isFeatured: productForm.isFeatured,
         isActive: productForm.isActive,
         isVariable: productForm.isVariable,
+        artworkFee: productForm.artworkFee,
+        hasArtworkOption: productForm.hasArtworkOption,
         images: productImages(editingProduct.id, productForm.imageUrls, productForm.name),
       };
       updateProduct(updated);
@@ -353,6 +374,8 @@ export const AdminPage: React.FC = () => {
         isFeatured: productForm.isFeatured,
         isActive: productForm.isActive,
         isVariable: productForm.isVariable,
+        artworkFee: productForm.artworkFee,
+        hasArtworkOption: productForm.hasArtworkOption,
         sortOrder: products.length + 1,
         images: productImages('prod-temp', productForm.imageUrls, productForm.name),
         // Starts as "price on request"; edit its options/prices under Admin → Prices
@@ -626,10 +649,18 @@ export const AdminPage: React.FC = () => {
       finishType,
     };
 
+    let newValues = [...gridRows];
+    if (newStockAtTop) {
+      newValues.unshift(newOption);
+    } else {
+      newValues.push(newOption);
+    }
+    newValues = newValues.map((v, idx) => ({ ...v, sortOrder: idx + 1 }));
+
     const updatedGroups = [...gridProduct.optionGroups];
     updatedGroups[0] = {
       ...updatedGroups[0],
-      values: [...updatedGroups[0].values, newOption],
+      values: newValues,
     };
 
     updateProduct({
@@ -643,9 +674,15 @@ export const AdminPage: React.FC = () => {
         const singleGroups = [...singleProduct.optionGroups];
         const singleRows = singleGroups[0].values ?? [];
         if (!singleRows.some((r) => r.label.toLowerCase() === label.toLowerCase())) {
+          let updatedSingleRows = [...singleRows];
+          if (newStockAtTop) {
+            updatedSingleRows.unshift({ ...newOption, groupId: singleGroups[0].id });
+          } else {
+            updatedSingleRows.push({ ...newOption, groupId: singleGroups[0].id });
+          }
           singleGroups[0] = {
             ...singleGroups[0],
-            values: [...singleRows, { ...newOption, groupId: singleGroups[0].id }],
+            values: updatedSingleRows.map((v, idx) => ({ ...v, sortOrder: idx + 1 })),
           };
           updateProduct({ ...singleProduct, optionGroups: singleGroups });
         }
@@ -654,6 +691,7 @@ export const AdminPage: React.FC = () => {
 
     setGridPaperId(id);
     setNewStockLabel('');
+    setNewStockAtTop(false);
     setShowAddStock(false);
     setPricesDirty(true);
   };
@@ -676,7 +714,7 @@ export const AdminPage: React.FC = () => {
     const newValues = updatedGroups[0].values.filter((v) => v.id !== rowId);
     updatedGroups[0] = {
       ...updatedGroups[0],
-      values: newValues,
+      values: newValues.map((v, idx) => ({ ...v, sortOrder: idx + 1 })),
     };
 
     updateProduct({
@@ -687,6 +725,76 @@ export const AdminPage: React.FC = () => {
     if (activeRowId === rowId) {
       setGridPaperId(newValues[0]?.id ?? '');
     }
+    setPricesDirty(true);
+  };
+
+  const handleReorderPaperStock = (fromIndex: number, toIndex: number) => {
+    if (!gridProduct || !gridProduct.optionGroups?.[0]) return;
+    if (fromIndex === toIndex || fromIndex < 0 || fromIndex >= gridRows.length || toIndex < 0 || toIndex >= gridRows.length) return;
+
+    const values = [...gridRows];
+    const [moved] = values.splice(fromIndex, 1);
+    values.splice(toIndex, 0, moved);
+
+    const reordered = values.map((val, idx) => ({ ...val, sortOrder: idx + 1 }));
+
+    const updatedGroups = [...gridProduct.optionGroups];
+    updatedGroups[0] = {
+      ...updatedGroups[0],
+      values: reordered,
+    };
+
+    updateProduct({
+      ...gridProduct,
+      optionGroups: updatedGroups,
+    });
+
+    if (selectedGridProduct === 'prod-vc-double') {
+      const singleProduct = products.find((p) => p.id === 'prod-vc-single');
+      if (singleProduct?.optionGroups?.[0]) {
+        const singleGroups = [...singleProduct.optionGroups];
+        const singleValues = [...singleGroups[0].values];
+        const orderMap = new Map<string, number>();
+        reordered.forEach((v, idx) => {
+          orderMap.set(v.id, idx);
+          orderMap.set(v.label.toLowerCase(), idx);
+        });
+        singleValues.sort((a, b) => {
+          const idxA = orderMap.get(a.id) ?? orderMap.get(a.label.toLowerCase()) ?? 999;
+          const idxB = orderMap.get(b.id) ?? orderMap.get(b.label.toLowerCase()) ?? 999;
+          return idxA - idxB;
+        });
+        singleGroups[0] = {
+          ...singleGroups[0],
+          values: singleValues.map((v, i) => ({ ...v, sortOrder: i + 1 })),
+        };
+        updateProduct({ ...singleProduct, optionGroups: singleGroups });
+      }
+    }
+
+    setPricesDirty(true);
+  };
+
+  const handleMovePaperStock = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    handleReorderPaperStock(index, targetIndex);
+  };
+
+  const handleSortPapersAlphabetically = () => {
+    if (!gridProduct || !gridProduct.optionGroups?.[0] || gridRows.length <= 1) return;
+    const sorted = [...gridRows].sort((a, b) =>
+      a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' })
+    );
+    const reordered = sorted.map((val, idx) => ({ ...val, sortOrder: idx + 1 }));
+    const updatedGroups = [...gridProduct.optionGroups];
+    updatedGroups[0] = {
+      ...updatedGroups[0],
+      values: reordered,
+    };
+    updateProduct({
+      ...gridProduct,
+      optionGroups: updatedGroups,
+    });
     setPricesDirty(true);
   };
 
@@ -717,10 +825,32 @@ export const AdminPage: React.FC = () => {
       isActive: true,
     };
 
+    let newValues = [...gridCols];
+    if (autoSortNewQty) {
+      const newUnits = unitCount(label);
+      if (newUnits > 0) {
+        const foundIdx = newValues.findIndex((v) => {
+          const u = unitCount(v.label);
+          return u > 0 && u > newUnits;
+        });
+        if (foundIdx !== -1) {
+          newValues.splice(foundIdx, 0, newOption);
+        } else {
+          newValues.push(newOption);
+        }
+      } else {
+        newValues.push(newOption);
+      }
+    } else {
+      newValues.push(newOption);
+    }
+
+    newValues = newValues.map((v, idx) => ({ ...v, sortOrder: idx + 1 }));
+
     const updatedGroups = [...gridProduct.optionGroups];
     updatedGroups[1] = {
       ...updatedGroups[1],
-      values: [...updatedGroups[1].values, newOption],
+      values: newValues,
     };
 
     updateProduct({
@@ -734,9 +864,28 @@ export const AdminPage: React.FC = () => {
         const singleGroups = [...singleProduct.optionGroups];
         const singleCols = singleGroups[1].values ?? [];
         if (!singleCols.some((c) => c.label.toLowerCase() === label.toLowerCase())) {
+          let updatedSingleCols = [...singleCols];
+          if (autoSortNewQty) {
+            const newUnits = unitCount(label);
+            if (newUnits > 0) {
+              const foundIdx = updatedSingleCols.findIndex((v) => {
+                const u = unitCount(v.label);
+                return u > 0 && u > newUnits;
+              });
+              if (foundIdx !== -1) {
+                updatedSingleCols.splice(foundIdx, 0, { ...newOption, groupId: singleGroups[1].id });
+              } else {
+                updatedSingleCols.push({ ...newOption, groupId: singleGroups[1].id });
+              }
+            } else {
+              updatedSingleCols.push({ ...newOption, groupId: singleGroups[1].id });
+            }
+          } else {
+            updatedSingleCols.push({ ...newOption, groupId: singleGroups[1].id });
+          }
           singleGroups[1] = {
             ...singleGroups[1],
-            values: [...singleCols, { ...newOption, groupId: singleGroups[1].id }],
+            values: updatedSingleCols.map((v, idx) => ({ ...v, sortOrder: idx + 1 })),
           };
           updateProduct({ ...singleProduct, optionGroups: singleGroups });
         }
@@ -765,13 +914,114 @@ export const AdminPage: React.FC = () => {
     const updatedGroups = [...gridProduct.optionGroups];
     updatedGroups[1] = {
       ...updatedGroups[1],
-      values: updatedGroups[1].values.filter((v) => v.id !== colId),
+      values: updatedGroups[1].values.filter((v) => v.id !== colId).map((v, idx) => ({ ...v, sortOrder: idx + 1 })),
     };
 
     updateProduct({
       ...gridProduct,
       optionGroups: updatedGroups,
     });
+    setPricesDirty(true);
+  };
+
+  const handleReorderQuantityTier = (fromIndex: number, toIndex: number) => {
+    if (!gridProduct || !gridProduct.optionGroups?.[1]) return;
+    if (fromIndex === toIndex || fromIndex < 0 || fromIndex >= gridCols.length || toIndex < 0 || toIndex >= gridCols.length) return;
+
+    const values = [...gridCols];
+    const [moved] = values.splice(fromIndex, 1);
+    values.splice(toIndex, 0, moved);
+
+    const reordered = values.map((val, idx) => ({ ...val, sortOrder: idx + 1 }));
+
+    const updatedGroups = [...gridProduct.optionGroups];
+    updatedGroups[1] = {
+      ...updatedGroups[1],
+      values: reordered,
+    };
+
+    updateProduct({
+      ...gridProduct,
+      optionGroups: updatedGroups,
+    });
+
+    if (selectedGridProduct === 'prod-vc-double') {
+      const singleProduct = products.find((p) => p.id === 'prod-vc-single');
+      if (singleProduct?.optionGroups?.[1]) {
+        const singleGroups = [...singleProduct.optionGroups];
+        const singleValues = [...singleGroups[1].values];
+        const orderMap = new Map<string, number>();
+        reordered.forEach((v, idx) => {
+          orderMap.set(v.id, idx);
+          orderMap.set(v.label.toLowerCase(), idx);
+        });
+        singleValues.sort((a, b) => {
+          const idxA = orderMap.get(a.id) ?? orderMap.get(a.label.toLowerCase()) ?? 999;
+          const idxB = orderMap.get(b.id) ?? orderMap.get(b.label.toLowerCase()) ?? 999;
+          return idxA - idxB;
+        });
+        singleGroups[1] = {
+          ...singleGroups[1],
+          values: singleValues.map((v, i) => ({ ...v, sortOrder: i + 1 })),
+        };
+        updateProduct({ ...singleProduct, optionGroups: singleGroups });
+      }
+    }
+
+    setPricesDirty(true);
+  };
+
+  const handleMoveQuantityTier = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    handleReorderQuantityTier(index, targetIndex);
+  };
+
+  const handleSortQuantitiesAscending = () => {
+    if (!gridProduct || !gridProduct.optionGroups?.[1] || gridCols.length <= 1) return;
+
+    const sorted = [...gridCols].sort((a, b) => {
+      const uA = unitCount(a.label);
+      const uB = unitCount(b.label);
+      if (uA > 0 && uB > 0 && uA !== uB) return uA - uB;
+      return a.label.localeCompare(b.label, undefined, { numeric: true });
+    });
+
+    const reordered = sorted.map((val, idx) => ({ ...val, sortOrder: idx + 1 }));
+
+    const updatedGroups = [...gridProduct.optionGroups];
+    updatedGroups[1] = {
+      ...updatedGroups[1],
+      values: reordered,
+    };
+
+    updateProduct({
+      ...gridProduct,
+      optionGroups: updatedGroups,
+    });
+
+    if (selectedGridProduct === 'prod-vc-double') {
+      const singleProduct = products.find((p) => p.id === 'prod-vc-single');
+      if (singleProduct?.optionGroups?.[1]) {
+        const singleGroups = [...singleProduct.optionGroups];
+        const singleValues = [...singleGroups[1].values];
+        const orderMap = new Map<string, number>();
+        reordered.forEach((v, idx) => {
+          orderMap.set(v.id, idx);
+          orderMap.set(v.label.toLowerCase(), idx);
+        });
+        singleValues.sort((a, b) => {
+          const idxA = orderMap.get(a.id) ?? orderMap.get(a.label.toLowerCase()) ?? 999;
+          const idxB = orderMap.get(b.id) ?? orderMap.get(b.label.toLowerCase()) ?? 999;
+          return idxA - idxB;
+        });
+        singleGroups[1] = {
+          ...singleGroups[1],
+          values: singleValues.map((v, i) => ({ ...v, sortOrder: i + 1 })),
+        };
+        updateProduct({ ...singleProduct, optionGroups: singleGroups });
+      }
+    }
+
     setPricesDirty(true);
   };
 
@@ -1312,6 +1562,14 @@ export const AdminPage: React.FC = () => {
                       <div className="text-slate-600 text-[11px]">
                         {item.selectedOptions.map((o) => `${o.groupName}: ${o.valueLabel}`).join(' · ')}
                       </div>
+                      {item.artworkType === 'design' && (
+                        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[10px]">
+                          <Palette className="w-3 h-3 text-[#D6342C]" />
+                          <span>
+                            Design Service (+{formatLKR(item.selectedAddons?.find((a) => a.id === 'addon-design')?.price ?? item.product?.artworkFee ?? 500)})
+                          </span>
+                        </div>
+                      )}
                       {item.artworkFiles.length > 0 && (
                         <div className="pt-2 border-t border-slate-200">
                           <span className="font-bold text-[11px] text-slate-700 block">Uploaded Artwork Files:</span>
@@ -1433,20 +1691,93 @@ export const AdminPage: React.FC = () => {
             </div>
           )}
 
+          {/* Artwork Design Pricing Strip for Selected Product */}
+          <div className="bg-white p-4 rounded-lg border border-[#E6E0D6] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-md bg-[#0F1B2D] text-white flex items-center justify-center shrink-0">
+                <Palette className="w-4 h-4 text-[#D6342C]" />
+              </div>
+              <div>
+                <div className="font-bold text-[#0F1B2D] flex items-center gap-2">
+                  <span>Artwork Design Charge — {gridProduct?.name}</span>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800">
+                    &quot;Design it for me&quot; option
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Fee added to the customer&apos;s total when choosing &quot;Design it for me&quot; for this product.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="flex items-center gap-1.5 text-xs text-slate-700 font-semibold cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={gridProduct?.hasArtworkOption !== false}
+                  onChange={(e) => {
+                    if (!gridProduct) return;
+                    updateProduct({
+                      ...gridProduct,
+                      hasArtworkOption: e.target.checked,
+                    });
+                    setPricesDirty(true);
+                  }}
+                  className="rounded border-[#E6E0D6] text-[#0F1B2D]"
+                />
+                <span>Offer Artwork Service</span>
+              </label>
+
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-slate-700">Fee (Rs.):</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="50"
+                  disabled={gridProduct?.hasArtworkOption === false}
+                  value={gridProduct?.artworkFee ?? siteSettings.defaultArtworkFee ?? 500}
+                  onChange={(e) => {
+                    if (!gridProduct) return;
+                    const val = Math.max(0, parseFloat(e.target.value) || 0);
+                    updateProduct({
+                      ...gridProduct,
+                      artworkFee: val,
+                    });
+                    setPricesDirty(true);
+                  }}
+                  className="w-28 p-1.5 font-bold text-slate-800 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:border-[#0F1B2D] outline-hidden disabled:opacity-50"
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             {/* Step 1: first option (paper / size ...) */}
             <div className="lg:col-span-4 bg-white rounded-lg border border-[#E6E0D6] shadow-xs overflow-hidden flex flex-col">
               <div className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-[#E6E0D6] flex justify-between items-center bg-[#FAF8F5]">
-                <span>1. Choose {gridProduct?.optionGroups?.[0]?.name ?? 'option'} ({gridRows.length})</span>
-                <button
-                  type="button"
-                  onClick={() => setShowAddStock(!showAddStock)}
-                  className="px-2 py-1 text-[11px] font-bold text-[#0F1B2D] hover:bg-[#E6E0D6]/60 rounded flex items-center gap-1 transition-colors"
-                  title="Add new paper stock"
-                >
-                  <Plus className="w-3.5 h-3.5 text-[#D6342C]" />
-                  <span>{showAddStock ? 'Close' : 'Add Stock'}</span>
-                </button>
+                <span className="truncate">1. Choose {gridProduct?.optionGroups?.[0]?.name ?? 'option'} ({gridRows.length})</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {gridRows.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={handleSortPapersAlphabetically}
+                      className="px-2 py-0.5 text-[10px] font-bold text-slate-700 bg-white border border-[#E6E0D6] hover:border-[#0F1B2D] hover:text-[#0F1B2D] rounded flex items-center gap-1 transition-colors shadow-2xs"
+                      title="Sort options alphabetically (A to Z)"
+                    >
+                      <ArrowUpDown className="w-3 h-3 text-[#D6342C]" />
+                      <span>A→Z</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowAddStock(!showAddStock)}
+                    className="px-2 py-1 text-[11px] font-bold text-[#0F1B2D] hover:bg-[#E6E0D6]/60 rounded flex items-center gap-1 transition-colors"
+                    title="Add new paper stock"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-[#D6342C]" />
+                    <span>{showAddStock ? 'Close' : 'Add Stock'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Add Stock Form */}
@@ -1494,38 +1825,127 @@ export const AdminPage: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  {selectedGridProduct === 'prod-vc-double' && (
-                    <label className="flex items-center gap-1.5 text-[11px] text-slate-600 pt-0.5 cursor-pointer">
+                  <div className="space-y-1 pt-0.5">
+                    <label className="flex items-center gap-1.5 text-[11px] text-slate-700 font-medium cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={alsoSyncSingleSidedStock}
-                        onChange={(e) => setAlsoSyncSingleSidedStock(e.target.checked)}
+                        checked={newStockAtTop}
+                        onChange={(e) => setNewStockAtTop(e.target.checked)}
                         className="rounded border-[#E6E0D6] text-[#0F1B2D]"
                       />
-                      <span>Also add to Single Sided Visiting Cards</span>
+                      <span>Insert at top of list (default is bottom)</span>
                     </label>
-                  )}
+                    {selectedGridProduct === 'prod-vc-double' && (
+                      <label className="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={alsoSyncSingleSidedStock}
+                          onChange={(e) => setAlsoSyncSingleSidedStock(e.target.checked)}
+                          className="rounded border-[#E6E0D6] text-[#0F1B2D]"
+                        />
+                        <span>Also add to Single Sided Visiting Cards</span>
+                      </label>
+                    )}
+                  </div>
                 </form>
               )}
 
               {/* Rows List */}
               <div className="divide-y divide-[#F0EBE1] overflow-y-auto max-h-[520px]">
-                {gridRows.map((row) => {
+                {gridRows.map((row, index) => {
                   const isSelected = activeRowId === row.id;
                   const from = rowFromPrice(row.id);
+                  const isDragOver = dragOverRowIndex === index;
+                  const isDragging = draggedRowIndex === index;
                   return (
                     <div
                       key={row.id}
-                      className={`group w-full text-left px-3.5 py-2.5 text-xs flex justify-between items-center gap-2 transition-colors cursor-pointer ${
+                      draggable
+                      onDragStart={(e) => {
+                        setDraggedRowIndex(index);
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', String(index));
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        if (dragOverRowIndex !== index) {
+                          setDragOverRowIndex(index);
+                        }
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverRowIndex === index) {
+                          setDragOverRowIndex(null);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (draggedRowIndex !== null && draggedRowIndex !== index) {
+                          handleReorderPaperStock(draggedRowIndex, index);
+                        }
+                        setDraggedRowIndex(null);
+                        setDragOverRowIndex(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedRowIndex(null);
+                        setDragOverRowIndex(null);
+                      }}
+                      className={`group w-full text-left px-3 py-2 text-xs flex justify-between items-center gap-1.5 transition-all cursor-pointer ${
                         isSelected ? 'bg-[#0F1B2D] text-white' : 'text-[#0F1B2D] hover:bg-[#FAF8F5]'
+                      } ${isDragOver ? 'border-t-2 border-[#D6342C] bg-amber-50/50' : ''} ${
+                        isDragging ? 'opacity-40' : ''
                       }`}
                       onClick={() => setGridPaperId(row.id)}
                     >
-                      <span className="font-semibold truncate flex-1">{row.label}</span>
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div
+                        className={`cursor-grab active:cursor-grabbing p-0.5 rounded ${
+                          isSelected ? 'text-slate-400 group-hover:text-white' : 'text-slate-300 group-hover:text-slate-500'
+                        }`}
+                        title="Drag up or down to reorder"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <GripVertical className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-semibold truncate flex-1" title={row.label}>{row.label}</span>
+                      <div className="flex items-center gap-1 shrink-0">
                         <span className={`text-[11px] ${isSelected ? 'text-slate-300' : 'text-slate-400'}`}>
                           {from != null ? `from ${formatLKR(from)}` : 'no prices'}
                         </span>
+                        {/* Move Up / Down controls */}
+                        <div className="flex items-center gap-0.5 ml-1">
+                          <button
+                            type="button"
+                            disabled={index === 0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMovePaperStock(index, 'up');
+                            }}
+                            title="Move up"
+                            className={`p-1 rounded transition-colors disabled:opacity-20 disabled:hover:bg-transparent ${
+                              isSelected
+                                ? 'text-slate-300 hover:text-white hover:bg-white/20'
+                                : 'text-slate-400 hover:text-[#0F1B2D] hover:bg-slate-200'
+                            }`}
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={index === gridRows.length - 1}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMovePaperStock(index, 'down');
+                            }}
+                            title="Move down"
+                            className={`p-1 rounded transition-colors disabled:opacity-20 disabled:hover:bg-transparent ${
+                              isSelected
+                                ? 'text-slate-300 hover:text-white hover:bg-white/20'
+                                : 'text-slate-400 hover:text-[#0F1B2D] hover:bg-slate-200'
+                            }`}
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -1533,7 +1953,7 @@ export const AdminPage: React.FC = () => {
                             handleDeletePaperStock(row.id, row.label);
                           }}
                           title={`Delete ${row.label}`}
-                          className={`opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/20 transition-opacity ${
+                          className={`p-1 rounded hover:bg-red-500/20 transition-opacity ${
                             isSelected ? 'text-red-300 hover:text-red-100' : 'text-slate-400 hover:text-red-600'
                           }`}
                         >
@@ -1562,15 +1982,28 @@ export const AdminPage: React.FC = () => {
             <div className="lg:col-span-8 bg-white rounded-lg border border-[#E6E0D6] shadow-xs overflow-hidden">
               <div className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-[#E6E0D6] flex justify-between items-center bg-[#FAF8F5]">
                 <span className="truncate pr-2">2. Set prices — {gridRows.find((r) => r.id === activeRowId)?.label}</span>
-                <button
-                  type="button"
-                  onClick={() => setShowAddQty(!showAddQty)}
-                  className="px-2 py-1 text-[11px] font-bold text-[#0F1B2D] hover:bg-[#E6E0D6]/60 rounded flex items-center gap-1 transition-colors shrink-0"
-                  title="Add new card set / quantity tier"
-                >
-                  <Plus className="w-3.5 h-3.5 text-[#D6342C]" />
-                  <span>{showAddQty ? 'Close' : 'Add Card Set / Quantity'}</span>
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {gridCols.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={handleSortQuantitiesAscending}
+                      className="px-2 py-1 text-[11px] font-bold text-slate-700 bg-white border border-[#E6E0D6] hover:border-[#0F1B2D] hover:text-[#0F1B2D] rounded flex items-center gap-1 transition-colors shadow-2xs"
+                      title="Sort all quantities numerically from lowest to highest"
+                    >
+                      <ArrowUpDown className="w-3 h-3 text-[#D6342C]" />
+                      <span>Sort Low → High</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowAddQty(!showAddQty)}
+                    className="px-2 py-1 text-[11px] font-bold text-[#0F1B2D] hover:bg-[#E6E0D6]/60 rounded flex items-center gap-1 transition-colors shrink-0"
+                    title="Add new card set / quantity tier"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-[#D6342C]" />
+                    <span>{showAddQty ? 'Close' : 'Add Card Set / Quantity'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Add Quantity / Card Set Form */}
@@ -1599,8 +2032,30 @@ export const AdminPage: React.FC = () => {
                       Add Tier
                     </button>
                   </div>
+                  <div className="flex flex-wrap items-center gap-3 pt-0.5">
+                    <label className="flex items-center gap-1.5 text-[11px] text-slate-700 font-medium cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={autoSortNewQty}
+                        onChange={(e) => setAutoSortNewQty(e.target.checked)}
+                        className="rounded border-[#E6E0D6] text-[#0F1B2D]"
+                      />
+                      <span>Insert in numerical order (recommended)</span>
+                    </label>
+                    {selectedGridProduct === 'prod-vc-double' && (
+                      <label className="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={alsoSyncSingleSidedQty}
+                          onChange={(e) => setAlsoSyncSingleSidedQty(e.target.checked)}
+                          className="rounded border-[#E6E0D6] text-[#0F1B2D]"
+                        />
+                        <span>Also add to Single Sided Visiting Cards</span>
+                      </label>
+                    )}
+                  </div>
                   {/* Suggestions for quick adding */}
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-amber-200/40">
                     <span className="text-[10px] text-slate-500">Quick suggestions:</span>
                     {['6,000 Cards', '7,000 Cards', '8,000 Cards', '10,000 Cards', '50 Cards', '250 Cards', '15,000 Cards']
                       .filter((s) => !gridCols.some((c) => c.label.toLowerCase() === s.toLowerCase()))
@@ -1616,35 +2071,65 @@ export const AdminPage: React.FC = () => {
                         </button>
                       ))}
                   </div>
-                  {selectedGridProduct === 'prod-vc-double' && (
-                    <label className="flex items-center gap-1.5 text-[11px] text-slate-600 pt-0.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={alsoSyncSingleSidedQty}
-                        onChange={(e) => setAlsoSyncSingleSidedQty(e.target.checked)}
-                        className="rounded border-[#E6E0D6] text-[#0F1B2D]"
-                      />
-                      <span>Also add to Single Sided Visiting Cards</span>
-                    </label>
-                  )}
                 </form>
               )}
 
               <table className="w-full text-xs">
                 <thead className="text-[10px] uppercase text-slate-500 bg-[#FAF8F5]">
                   <tr>
+                    <th className="w-7 px-2 py-2 text-center" title="Drag to reorder"></th>
                     <th className="px-4 py-2 text-left">{gridProduct?.optionGroups?.[1]?.name ?? 'Quantity'}</th>
                     <th className="px-4 py-2 text-left">Price (Rs.)</th>
                     <th className="px-4 py-2 text-right">Per unit</th>
-                    <th className="px-2 py-2 text-center w-10"></th>
+                    <th className="px-2 py-2 text-center w-24">Order / Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {gridCols.map((col) => {
+                  {gridCols.map((col, colIdx) => {
                     const price = gridPrice(activeRowId, col.id);
                     const units = unitCount(col.label);
+                    const isDragOver = dragOverColIndex === colIdx;
+                    const isDragging = draggedColIndex === colIdx;
                     return (
-                      <tr key={col.id} className="hover:bg-[#FAF8F5] group">
+                      <tr
+                        key={col.id}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedColIndex(colIdx);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', String(colIdx));
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          if (dragOverColIndex !== colIdx) {
+                            setDragOverColIndex(colIdx);
+                          }
+                        }}
+                        onDragLeave={() => {
+                          if (dragOverColIndex === colIdx) {
+                            setDragOverColIndex(null);
+                          }
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (draggedColIndex !== null && draggedColIndex !== colIdx) {
+                            handleReorderQuantityTier(draggedColIndex, colIdx);
+                          }
+                          setDraggedColIndex(null);
+                          setDragOverColIndex(null);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedColIndex(null);
+                          setDragOverColIndex(null);
+                        }}
+                        className={`hover:bg-[#FAF8F5] group transition-colors ${
+                          isDragOver ? 'border-t-2 border-[#D6342C] bg-amber-50/50' : ''
+                        } ${isDragging ? 'opacity-40' : ''}`}
+                      >
+                        <td className="px-2 py-1.5 text-center text-slate-300 group-hover:text-slate-500 cursor-grab active:cursor-grabbing">
+                          <GripVertical className="w-3.5 h-3.5 mx-auto" />
+                        </td>
                         <td className="px-4 py-1.5 font-semibold text-[#0F1B2D]">{col.label}</td>
                         <td className="px-4 py-1.5">
                           <input
@@ -1664,14 +2149,34 @@ export const AdminPage: React.FC = () => {
                           {price != null && units > 0 ? formatLKR(price / units) : '—'}
                         </td>
                         <td className="px-2 py-1.5 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteQuantityTier(col.id, col.label)}
-                            title={`Delete ${col.label}`}
-                            className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 p-1 rounded transition-opacity"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center justify-center gap-0.5">
+                            <button
+                              type="button"
+                              disabled={colIdx === 0}
+                              onClick={() => handleMoveQuantityTier(colIdx, 'up')}
+                              title="Move up"
+                              className="p-1 rounded text-slate-400 hover:text-[#0F1B2D] hover:bg-slate-200 disabled:opacity-20 disabled:hover:bg-transparent transition-colors"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={colIdx === gridCols.length - 1}
+                              onClick={() => handleMoveQuantityTier(colIdx, 'down')}
+                              title="Move down"
+                              className="p-1 rounded text-slate-400 hover:text-[#0F1B2D] hover:bg-slate-200 disabled:opacity-20 disabled:hover:bg-transparent transition-colors"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteQuantityTier(col.id, col.label)}
+                              title={`Delete ${col.label}`}
+                              className="text-slate-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors ml-1"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1690,7 +2195,20 @@ export const AdminPage: React.FC = () => {
                     <Plus className="w-3.5 h-3.5" />
                     <span>+ Add New {gridProduct?.optionGroups?.[1]?.name ?? 'Card Set / Quantity'} Tier</span>
                   </button>
-                  <span className="text-[10px] text-slate-400">Total {gridCols.length} quantity tiers</span>
+                  <div className="flex items-center gap-3">
+                    {gridCols.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={handleSortQuantitiesAscending}
+                        className="text-[11px] font-semibold text-slate-600 hover:text-[#0F1B2D] flex items-center gap-1"
+                        title="Sort all quantities from lowest to highest"
+                      >
+                        <ArrowUpDown className="w-3 h-3 text-[#D6342C]" />
+                        <span>Sort Low → High</span>
+                      </button>
+                    )}
+                    <span className="text-[10px] text-slate-400">Total {gridCols.length} quantity tiers</span>
+                  </div>
                 </div>
               )}
 
@@ -2266,6 +2784,45 @@ export const AdminPage: React.FC = () => {
                     </label>
                   </div>
 
+                  {/* Artwork Design Service Settings for this product */}
+                  <div className="p-3.5 bg-amber-50/60 rounded border border-amber-200/70 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={productForm.hasArtworkOption}
+                          onChange={(e) =>
+                            setProductForm({ ...productForm, hasArtworkOption: e.target.checked })
+                          }
+                          className="accent-[#0F1B2D]"
+                        />
+                        <span>Offer &quot;Design it for me&quot; Artwork Service</span>
+                      </label>
+                    </div>
+                    {productForm.hasArtworkOption && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                        <label className="font-semibold text-slate-700">Artwork Design Charge:</label>
+                        <div className="flex items-center gap-1">
+                          <span className="font-bold text-slate-600">Rs.</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="50"
+                            value={productForm.artworkFee}
+                            onChange={(e) =>
+                              setProductForm({
+                                ...productForm,
+                                artworkFee: Math.max(0, parseFloat(e.target.value) || 0),
+                              })
+                            }
+                            className="w-28 p-1.5 font-bold text-slate-800 bg-white border border-[#E6E0D6] rounded focus:border-[#0F1B2D] outline-hidden"
+                          />
+                        </div>
+                        <span className="text-[11px] text-slate-500">(Added when customer selects &quot;Design it for me&quot;)</span>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Modal Footer */}
                   <div className="flex justify-end gap-3 pt-4 border-t border-[#E6E0D6]">
                     <button
@@ -2562,6 +3119,21 @@ export const AdminPage: React.FC = () => {
                 }
                 className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded font-bold"
               />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Default Artwork Design Fee (LKR)</label>
+              <input
+                type="number"
+                min="0"
+                step="50"
+                value={settingsForm.defaultArtworkFee ?? 500}
+                onChange={(e) =>
+                  editSettings({ defaultArtworkFee: Math.max(0, parseFloat(e.target.value) || 0) })
+                }
+                className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded font-bold"
+              />
+              <p className="text-[11px] text-slate-500">Store-wide default fee for &quot;Design it for me&quot; when not customized on a product.</p>
             </div>
 
             <div className="space-y-1">
