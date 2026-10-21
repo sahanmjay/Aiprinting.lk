@@ -33,13 +33,15 @@ import {
   GripVertical,
   ArrowUpDown,
   Palette,
+  Check,
+  X,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatLKR, formatItemPrice, getWhatsAppUrl } from '../lib/formatters';
 import { openStoredFile, downloadStoredFile, uploadImage, deleteUploadedImage, IMAGE_GUIDE } from '../lib/supabase';
 import { HERO_SLIDES } from '../components/home/HeroShowcase';
 import { DEFAULT_SITE_SETTINGS } from '../data/seedData';
-import { tableOptionGroups, optionId } from '../data/priceTables';
+import { tableOptionGroups, optionId, finishOf } from '../data/priceTables';
 import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product, SiteSettings, SocialLinks, OptionValue } from '../types';
 
 const MAX_PRODUCT_PHOTOS = 4;
@@ -110,9 +112,11 @@ export const AdminPage: React.FC = () => {
     importGridCSV,
     addProduct,
     updateProduct,
+    updateMultipleProducts,
     deleteProduct,
     duplicateProduct,
     updateSiteSettings,
+    saveProducts,
   } = useStore();
 
   // Authentication State
@@ -159,6 +163,10 @@ export const AdminPage: React.FC = () => {
   const [dragOverRowIndex, setDragOverRowIndex] = useState<number | null>(null);
   const [draggedColIndex, setDraggedColIndex] = useState<number | null>(null);
   const [dragOverColIndex, setDragOverColIndex] = useState<number | null>(null);
+
+  // Inline editing state for paper stock names
+  const [editingStockId, setEditingStockId] = useState<string | null>(null);
+  const [editingStockName, setEditingStockName] = useState('');
 
   // Site Settings Tab State
   const [settingsForm, setSettingsForm] = useState(siteSettings);
@@ -227,6 +235,7 @@ export const AdminPage: React.FC = () => {
     isVariable: true,
     artworkFee: 500,
     hasArtworkOption: true,
+    setAsCategoryCover: true,
   });
 
   // Photos uploaded while the editor is open; the ones not kept are removed again to save Storage space
@@ -296,6 +305,7 @@ export const AdminPage: React.FC = () => {
       isVariable: true,
       artworkFee: siteSettings.defaultArtworkFee ?? 500,
       hasArtworkOption: true,
+      setAsCategoryCover: true,
     });
     setIsProductModalOpen(true);
   };
@@ -318,6 +328,7 @@ export const AdminPage: React.FC = () => {
       isVariable: p.isVariable,
       artworkFee: p.artworkFee ?? siteSettings.defaultArtworkFee ?? 500,
       hasArtworkOption: p.hasArtworkOption ?? true,
+      setAsCategoryCover: true,
     });
     setIsProductModalOpen(true);
   };
@@ -387,6 +398,16 @@ export const AdminPage: React.FC = () => {
         }),
       });
     }
+
+    if (productForm.setAsCategoryCover && productForm.imageUrls[0]) {
+      updateSiteSettings({
+        categoryImages: {
+          ...(siteSettings.categoryImages || {}),
+          [productForm.categoryId]: productForm.imageUrls[0],
+        },
+      });
+    }
+
     closeProductModal(productForm.imageUrls);
   };
 
@@ -728,6 +749,82 @@ export const AdminPage: React.FC = () => {
     setPricesDirty(true);
   };
 
+  const handleStartEditStock = (row: OptionValue) => {
+    setEditingStockId(row.id);
+    setEditingStockName(row.label);
+  };
+
+  const handleCancelEditStock = () => {
+    setEditingStockId(null);
+    setEditingStockName('');
+  };
+
+  const handleSaveStockName = (rowId: string, oldLabel: string) => {
+    if (!gridProduct || !gridProduct.optionGroups?.[0]) return;
+    const trimmed = editingStockName.trim();
+    if (!trimmed || trimmed === oldLabel) {
+      setEditingStockId(null);
+      setEditingStockName('');
+      return;
+    }
+
+    if (gridRows.some((r) => r.id !== rowId && r.label.toLowerCase() === trimmed.toLowerCase())) {
+      alert(`A paper stock named "${trimmed}" already exists.`);
+      return;
+    }
+
+    const updatedRows = gridRows.map((r) => {
+      if (r.id === rowId) {
+        return {
+          ...r,
+          label: trimmed,
+          finishType: finishOf(trimmed) || r.finishType,
+        };
+      }
+      return r;
+    });
+
+    const updatedGroups = [...gridProduct.optionGroups];
+    updatedGroups[0] = {
+      ...updatedGroups[0],
+      values: updatedRows,
+    };
+
+    const toUpdate: Product[] = [
+      {
+        ...gridProduct,
+        optionGroups: updatedGroups,
+      },
+    ];
+
+    if (selectedGridProduct === 'prod-vc-double') {
+      const singleProduct = products.find((p) => p.id === 'prod-vc-single');
+      if (singleProduct?.optionGroups?.[0]) {
+        const singleGroups = [...singleProduct.optionGroups];
+        const singleRows = singleGroups[0].values.map((r) => {
+          if (r.id === rowId || r.label.toLowerCase() === oldLabel.toLowerCase()) {
+            return {
+              ...r,
+              label: trimmed,
+              finishType: finishOf(trimmed) || r.finishType,
+            };
+          }
+          return r;
+        });
+        singleGroups[0] = {
+          ...singleGroups[0],
+          values: singleRows,
+        };
+        toUpdate.push({ ...singleProduct, optionGroups: singleGroups });
+      }
+    }
+
+    updateMultipleProducts(toUpdate);
+    setPricesDirty(true);
+    setEditingStockId(null);
+    setEditingStockName('');
+  };
+
   const handleReorderPaperStock = (fromIndex: number, toIndex: number) => {
     if (!gridProduct || !gridProduct.optionGroups?.[0]) return;
     if (fromIndex === toIndex || fromIndex < 0 || fromIndex >= gridRows.length || toIndex < 0 || toIndex >= gridRows.length) return;
@@ -744,10 +841,12 @@ export const AdminPage: React.FC = () => {
       values: reordered,
     };
 
-    updateProduct({
-      ...gridProduct,
-      optionGroups: updatedGroups,
-    });
+    const toUpdate: Product[] = [
+      {
+        ...gridProduct,
+        optionGroups: updatedGroups,
+      },
+    ];
 
     if (selectedGridProduct === 'prod-vc-double') {
       const singleProduct = products.find((p) => p.id === 'prod-vc-single');
@@ -768,10 +867,11 @@ export const AdminPage: React.FC = () => {
           ...singleGroups[0],
           values: singleValues.map((v, i) => ({ ...v, sortOrder: i + 1 })),
         };
-        updateProduct({ ...singleProduct, optionGroups: singleGroups });
+        toUpdate.push({ ...singleProduct, optionGroups: singleGroups });
       }
     }
 
+    updateMultipleProducts(toUpdate);
     setPricesDirty(true);
   };
 
@@ -791,10 +891,35 @@ export const AdminPage: React.FC = () => {
       ...updatedGroups[0],
       values: reordered,
     };
-    updateProduct({
-      ...gridProduct,
-      optionGroups: updatedGroups,
-    });
+    const toUpdate: Product[] = [
+      {
+        ...gridProduct,
+        optionGroups: updatedGroups,
+      },
+    ];
+    if (selectedGridProduct === 'prod-vc-double') {
+      const singleProduct = products.find((p) => p.id === 'prod-vc-single');
+      if (singleProduct?.optionGroups?.[0]) {
+        const singleGroups = [...singleProduct.optionGroups];
+        const singleValues = [...singleGroups[0].values];
+        const orderMap = new Map<string, number>();
+        reordered.forEach((v, idx) => {
+          orderMap.set(v.id, idx);
+          orderMap.set(v.label.toLowerCase(), idx);
+        });
+        singleValues.sort((a, b) => {
+          const idxA = orderMap.get(a.id) ?? orderMap.get(a.label.toLowerCase()) ?? 999;
+          const idxB = orderMap.get(b.id) ?? orderMap.get(b.label.toLowerCase()) ?? 999;
+          return idxA - idxB;
+        });
+        singleGroups[0] = {
+          ...singleGroups[0],
+          values: singleValues.map((v, i) => ({ ...v, sortOrder: i + 1 })),
+        };
+        toUpdate.push({ ...singleProduct, optionGroups: singleGroups });
+      }
+    }
+    updateMultipleProducts(toUpdate);
     setPricesDirty(true);
   };
 
@@ -940,10 +1065,12 @@ export const AdminPage: React.FC = () => {
       values: reordered,
     };
 
-    updateProduct({
-      ...gridProduct,
-      optionGroups: updatedGroups,
-    });
+    const toUpdate: Product[] = [
+      {
+        ...gridProduct,
+        optionGroups: updatedGroups,
+      },
+    ];
 
     if (selectedGridProduct === 'prod-vc-double') {
       const singleProduct = products.find((p) => p.id === 'prod-vc-single');
@@ -964,10 +1091,11 @@ export const AdminPage: React.FC = () => {
           ...singleGroups[1],
           values: singleValues.map((v, i) => ({ ...v, sortOrder: i + 1 })),
         };
-        updateProduct({ ...singleProduct, optionGroups: singleGroups });
+        toUpdate.push({ ...singleProduct, optionGroups: singleGroups });
       }
     }
 
+    updateMultipleProducts(toUpdate);
     setPricesDirty(true);
   };
 
@@ -994,10 +1122,12 @@ export const AdminPage: React.FC = () => {
       values: reordered,
     };
 
-    updateProduct({
-      ...gridProduct,
-      optionGroups: updatedGroups,
-    });
+    const toUpdate: Product[] = [
+      {
+        ...gridProduct,
+        optionGroups: updatedGroups,
+      },
+    ];
 
     if (selectedGridProduct === 'prod-vc-double') {
       const singleProduct = products.find((p) => p.id === 'prod-vc-single');
@@ -1018,19 +1148,23 @@ export const AdminPage: React.FC = () => {
           ...singleGroups[1],
           values: singleValues.map((v, i) => ({ ...v, sortOrder: i + 1 })),
         };
-        updateProduct({ ...singleProduct, optionGroups: singleGroups });
+        toUpdate.push({ ...singleProduct, optionGroups: singleGroups });
       }
     }
 
+    updateMultipleProducts(toUpdate);
     setPricesDirty(true);
   };
 
   const handleSavePrices = async () => {
     setIsSavingPrices(true);
-    const error = await savePriceMatrix();
+    const [error, prodError] = await Promise.all([
+      savePriceMatrix(),
+      saveProducts(),
+    ]);
     setIsSavingPrices(false);
-    if (error) {
-      alert(`Could not save prices: ${error}`);
+    if (error || prodError) {
+      alert(`Could not save: ${error || prodError}`);
       return;
     }
     setPricesDirty(false);
@@ -1857,11 +1991,13 @@ export const AdminPage: React.FC = () => {
                   const from = rowFromPrice(row.id);
                   const isDragOver = dragOverRowIndex === index;
                   const isDragging = draggedRowIndex === index;
+                  const isEditing = editingStockId === row.id;
                   return (
                     <div
                       key={row.id}
-                      draggable
+                      draggable={!isEditing}
                       onDragStart={(e) => {
+                        if (isEditing) return;
                         setDraggedRowIndex(index);
                         e.dataTransfer.effectAllowed = 'move';
                         e.dataTransfer.setData('text/plain', String(index));
@@ -1880,8 +2016,10 @@ export const AdminPage: React.FC = () => {
                       }}
                       onDrop={(e) => {
                         e.preventDefault();
-                        if (draggedRowIndex !== null && draggedRowIndex !== index) {
-                          handleReorderPaperStock(draggedRowIndex, index);
+                        const rawIndex = e.dataTransfer.getData('text/plain');
+                        const fromIndex = rawIndex !== '' && !isNaN(Number(rawIndex)) ? Number(rawIndex) : draggedRowIndex;
+                        if (fromIndex !== null && fromIndex !== index) {
+                          handleReorderPaperStock(fromIndex, index);
                         }
                         setDraggedRowIndex(null);
                         setDragOverRowIndex(null);
@@ -1895,7 +2033,9 @@ export const AdminPage: React.FC = () => {
                       } ${isDragOver ? 'border-t-2 border-[#D6342C] bg-amber-50/50' : ''} ${
                         isDragging ? 'opacity-40' : ''
                       }`}
-                      onClick={() => setGridPaperId(row.id)}
+                      onClick={() => {
+                        if (!isEditing) setGridPaperId(row.id);
+                      }}
                     >
                       <div
                         className={`cursor-grab active:cursor-grabbing p-0.5 rounded ${
@@ -1906,60 +2046,137 @@ export const AdminPage: React.FC = () => {
                       >
                         <GripVertical className="w-3.5 h-3.5" />
                       </div>
-                      <span className="font-semibold truncate flex-1" title={row.label}>{row.label}</span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className={`text-[11px] ${isSelected ? 'text-slate-300' : 'text-slate-400'}`}>
-                          {from != null ? `from ${formatLKR(from)}` : 'no prices'}
-                        </span>
-                        {/* Move Up / Down controls */}
-                        <div className="flex items-center gap-0.5 ml-1">
+
+                      {isEditing ? (
+                        <div
+                          className="flex items-center gap-1.5 flex-1 min-w-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="text"
+                            autoFocus
+                            value={editingStockName}
+                            onChange={(e) => setEditingStockName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSaveStockName(row.id, row.label);
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                handleCancelEditStock();
+                              }
+                            }}
+                            onBlur={() => {
+                              handleSaveStockName(row.id, row.label);
+                            }}
+                            className="flex-1 min-w-0 px-2 py-0.5 text-xs text-[#0F1B2D] bg-white border border-[#0F1B2D] rounded shadow-inner font-semibold outline-hidden"
+                          />
                           <button
                             type="button"
-                            disabled={index === 0}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMovePaperStock(index, 'up');
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSaveStockName(row.id, row.label);
                             }}
-                            title="Move up"
-                            className={`p-1 rounded transition-colors disabled:opacity-20 disabled:hover:bg-transparent ${
-                              isSelected
-                                ? 'text-slate-300 hover:text-white hover:bg-white/20'
-                                : 'text-slate-400 hover:text-[#0F1B2D] hover:bg-slate-200'
-                            }`}
+                            title="Save name (Enter)"
+                            className="p-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shrink-0"
                           >
-                            <ChevronUp className="w-3.5 h-3.5" />
+                            <Check className="w-3.5 h-3.5" />
                           </button>
                           <button
                             type="button"
-                            disabled={index === gridRows.length - 1}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMovePaperStock(index, 'down');
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleCancelEditStock();
                             }}
-                            title="Move down"
-                            className={`p-1 rounded transition-colors disabled:opacity-20 disabled:hover:bg-transparent ${
-                              isSelected
-                                ? 'text-slate-300 hover:text-white hover:bg-white/20'
-                                : 'text-slate-400 hover:text-[#0F1B2D] hover:bg-slate-200'
-                            }`}
+                            title="Cancel (Esc)"
+                            className="p-1 rounded bg-slate-200 hover:bg-slate-300 text-slate-700 transition-colors shrink-0"
                           >
-                            <ChevronDown className="w-3.5 h-3.5" />
+                            <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeletePaperStock(row.id, row.label);
-                          }}
-                          title={`Delete ${row.label}`}
-                          className={`p-1 rounded hover:bg-red-500/20 transition-opacity ${
-                            isSelected ? 'text-red-300 hover:text-red-100' : 'text-slate-400 hover:text-red-600'
-                          }`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      ) : (
+                        <>
+                          <span
+                            className="font-semibold truncate flex-1 select-none"
+                            title={`${row.label} (Double-click or click pencil to rename)`}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              handleStartEditStock(row);
+                            }}
+                          >
+                            {row.label}
+                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className={`text-[11px] ${isSelected ? 'text-slate-300' : 'text-slate-400'}`}>
+                              {from != null ? `from ${formatLKR(from)}` : 'no prices'}
+                            </span>
+                            {/* Rename pencil button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartEditStock(row);
+                              }}
+                              title="Rename paper stock"
+                              className={`p-1 rounded transition-colors ${
+                                isSelected
+                                  ? 'text-slate-300 hover:text-white hover:bg-white/20'
+                                  : 'text-slate-400 hover:text-[#0F1B2D] hover:bg-slate-200'
+                              }`}
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            {/* Move Up / Down controls */}
+                            <div className="flex items-center gap-0.5">
+                              <button
+                                type="button"
+                                disabled={index === 0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMovePaperStock(index, 'up');
+                                }}
+                                title="Move up"
+                                className={`p-1 rounded transition-colors disabled:opacity-20 disabled:hover:bg-transparent ${
+                                  isSelected
+                                    ? 'text-slate-300 hover:text-white hover:bg-white/20'
+                                    : 'text-slate-400 hover:text-[#0F1B2D] hover:bg-slate-200'
+                                }`}
+                              >
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={index === gridRows.length - 1}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMovePaperStock(index, 'down');
+                                }}
+                                title="Move down"
+                                className={`p-1 rounded transition-colors disabled:opacity-20 disabled:hover:bg-transparent ${
+                                  isSelected
+                                    ? 'text-slate-300 hover:text-white hover:bg-white/20'
+                                    : 'text-slate-400 hover:text-[#0F1B2D] hover:bg-slate-200'
+                                }`}
+                              >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeletePaperStock(row.id, row.label);
+                              }}
+                              title={`Delete ${row.label}`}
+                              className={`p-1 rounded hover:bg-red-500/20 transition-opacity ${
+                                isSelected ? 'text-red-300 hover:text-red-100' : 'text-slate-400 hover:text-red-600'
+                              }`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   );
                 })}
@@ -2676,6 +2893,24 @@ export const AdminPage: React.FC = () => {
                     <p className="text-[10px] text-slate-400">
                       {IMAGE_GUIDE.product.hint} Stored copies are usually under 300 KB, and removed uploads are deleted when you save.
                     </p>
+
+                    {/* Homepage Category Cover Sync */}
+                    <div className="pt-2 border-t border-[#E6E0D6]/60">
+                      <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={productForm.setAsCategoryCover}
+                          onChange={(e) => setProductForm((f) => ({ ...f, setAsCategoryCover: e.target.checked }))}
+                          className="rounded border-[#E6E0D6] text-[#0F1B2D]"
+                        />
+                        <span>
+                          Sync as Homepage category cover photo for <strong>{categories.find((c) => c.id === productForm.categoryId)?.name || 'this category'}</strong>
+                        </span>
+                      </label>
+                      <p className="text-[10px] text-slate-400 ml-5 mt-0.5">
+                        The first photo will automatically display on the homepage "Shop by Category" card.
+                      </p>
+                    </div>
                   </div>
 
                   {/* Short Description */}
@@ -3350,6 +3585,62 @@ export const AdminPage: React.FC = () => {
                         Use built-in
                       </button>
                     )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+
+          {/* Homepage Category Covers */}
+          <section className="space-y-3">
+            <div>
+              <h4 className="font-bold text-[#0F1B2D] uppercase tracking-wider">Homepage Category Covers</h4>
+              <p className="text-[11px] text-slate-500">
+                Shown in the "Shop by Category" grid on the homepage. By default, each card auto-syncs with the primary photo of the product in the catalogue. You can also upload a dedicated cover photo here.
+              </p>
+            </div>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {categories.map((cat) => {
+                const custom = siteSettings.categoryImages?.[cat.id];
+                return (
+                  <li key={cat.id} className="p-3 rounded border border-[#E6E0D6] flex flex-col justify-between gap-2.5 bg-[#FAF8F5]">
+                    <div className="flex items-center gap-3">
+                      <img src={cat.imageUrl} alt={cat.name} className="w-16 h-12 object-cover rounded border border-[#E6E0D6] bg-slate-100 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-[#0F1B2D] text-xs truncate">{cat.name}</div>
+                        <div className="text-[10px] text-slate-500">
+                          {custom ? 'Custom cover uploaded' : 'Auto-synced from catalogue'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-[#E6E0D6]/60">
+                      <UploadButton
+                        busy={imageBusy === `cat-${cat.id}`}
+                        label={custom ? 'Replace' : 'Upload'}
+                        onFile={(file) =>
+                          saveImageSetting(
+                            `cat-${cat.id}`,
+                            file,
+                            IMAGE_GUIDE.product.maxSize,
+                            (url) => ({ categoryImages: { ...(siteSettings.categoryImages || {}), [cat.id]: url } }),
+                            custom
+                          )
+                        }
+                      />
+                      {custom && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const rest = { ...(siteSettings.categoryImages || {}) };
+                            delete rest[cat.id];
+                            removeImageSetting({ categoryImages: rest }, custom);
+                          }}
+                          className="text-slate-500 hover:text-red-600 text-[10px] font-semibold"
+                        >
+                          Reset to catalogue photo
+                        </button>
+                      )}
+                    </div>
                   </li>
                 );
               })}

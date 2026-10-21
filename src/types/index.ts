@@ -243,6 +243,8 @@ export interface SiteSettings {
   elfsightReviewsId: string; // Elfsight Google Reviews widget id; empty hides the reviews section
   clientLogos: ClientLogo[];
   heroBackgrounds: Record<string, string>; // hero slide productId -> uploaded background (else the built-in photo)
+  categoryImages?: Record<string, string>; // categoryId -> custom uploaded cover image (else auto-synced from catalogue)
   gtmId: string;
   metaPixelId: string;
 }
+

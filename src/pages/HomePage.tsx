@@ -220,7 +220,7 @@ export const HomePage: React.FC = () => {
               key={prod.id}
               className="bg-white rounded border border-[#E6E0D6] overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group"
             >
-              <div>
+              <Link to={`/product/${prod.slug}`} className="block flex-1 cursor-pointer">
                 <div className="relative aspect-4/3 bg-slate-100 overflow-hidden">
                   <img
                     src={prod.images[0]?.imageUrl}
@@ -247,7 +247,7 @@ export const HomePage: React.FC = () => {
                     {prod.shortDescription}
                   </p>
                 </div>
-              </div>
+              </Link>
 
               <div className="p-4 pt-0 border-t border-slate-100 mt-2 flex items-center justify-between">
                 <div>

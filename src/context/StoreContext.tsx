@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
   Product,
@@ -68,6 +68,7 @@ interface StoreContextType {
   // Product & Settings Admin
   addProduct: (product: Omit<Product, 'id' | 'createdAt'>) => Product;
   updateProduct: (updated: Product) => void;
+  updateMultipleProducts: (updatedList: Product[]) => void;
   deleteProduct: (productId: string) => void;
   duplicateProduct: (productId: string) => Product | undefined;
   updateSiteSettings: (newSettings: Partial<SiteSettings>) => Promise<string | null>; // null = saved for every visitor
@@ -75,6 +76,7 @@ interface StoreContextType {
   logoutAdmin: () => Promise<void>;
   refreshAdminData: () => Promise<void>;
   savePriceMatrix: () => Promise<string | null>; // null = saved, else error message
+  saveProducts: () => Promise<string | null>;
 
   // Customer accounts (Supabase Auth, email + password)
   customer: Customer | null;
@@ -118,6 +120,8 @@ const withDefaults = (saved: Partial<SiteSettings>): SiteSettings => ({
   bankDetails: { ...DEFAULT_SITE_SETTINGS.bankDetails, ...saved.bankDetails },
   socialLinks: { ...DEFAULT_SITE_SETTINGS.socialLinks, ...saved.socialLinks },
   clientLogos: saved.clientLogos && saved.clientLogos.length > 0 ? saved.clientLogos : DEFAULT_SITE_SETTINGS.clientLogos,
+  heroBackgrounds: { ...DEFAULT_SITE_SETTINGS.heroBackgrounds, ...saved.heroBackgrounds },
+  categoryImages: { ...(DEFAULT_SITE_SETTINGS.categoryImages ?? {}), ...(saved.categoryImages ?? {}) },
 });
 
 // Staff's saved product list wins; built-in products added later (never saved or deleted by staff) are appended.
@@ -137,10 +141,41 @@ const UNIQUE_VIOLATION = '23505';
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 1. Initial State from localStorage or Seeds
   const [products, setProducts] = useState<Product[]>(() => load(PRODUCTS_KEY, () => SEED_PRODUCTS));
-
-  const [categories] = useState<Category[]>(SEED_CATEGORIES);
-
   const [siteSettings, setSiteSettings] = useState<SiteSettings>(() => withDefaults(load('aiprint_settings', () => DEFAULT_SITE_SETTINGS)));
+
+  // Dynamic categories whose images stay auto-synced with catalogue products (or siteSettings override)
+  const categories = useMemo<Category[]>(() => {
+    return SEED_CATEGORIES.map((cat) => {
+      const explicit = siteSettings.categoryImages?.[cat.id] || siteSettings.categoryImages?.[cat.slug];
+      if (explicit) {
+        return { ...cat, imageUrl: explicit };
+      }
+
+      const catProducts = products.filter((p) => p.categoryId === cat.id || p.categoryId === cat.slug);
+
+      const activeProducts = catProducts
+        .filter((p) => p.isActive && p.images && p.images.length > 0 && p.images[0]?.imageUrl)
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+      const anyProducts = catProducts
+        .filter((p) => p.images && p.images.length > 0 && p.images[0]?.imageUrl)
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+      // Prefer products with a real non-placeholder photo if available
+      const primaryProduct =
+        activeProducts.find((p) => !p.images[0].imageUrl.includes('placeholder')) ||
+        activeProducts[0] ||
+        anyProducts.find((p) => !p.images[0].imageUrl.includes('placeholder')) ||
+        anyProducts[0];
+
+      const liveImage = primaryProduct?.images?.[0]?.imageUrl;
+
+      return {
+        ...cat,
+        imageUrl: liveImage || cat.imageUrl,
+      };
+    });
+  }, [products, siteSettings.categoryImages]);
   const [removedProductIds, setRemovedProductIds] = useState<string[]>([]);
 
   const [cart, setCart] = useState<CartItem[]>(() => load('aiprint_cart', () => []));
@@ -538,8 +573,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateProduct = (updated: Product) => {
-    publishProducts(products.map((p) => (p.id === updated.id ? updated : p)));
+    setProducts((prev) => {
+      const next = prev.map((p) => (p.id === updated.id ? updated : p));
+      save(PRODUCTS_KEY, next);
+      saveShared('products', { list: next, removed: removedProductIds }).then((err) => err && console.warn(err));
+      return next;
+    });
   };
+
+  const updateMultipleProducts = (updatedList: Product[]) => {
+    setProducts((prev) => {
+      const map = new Map(updatedList.map((p) => [p.id, p]));
+      const next = prev.map((p) => map.get(p.id) || p);
+      save(PRODUCTS_KEY, next);
+      saveShared('products', { list: next, removed: removedProductIds }).then((err) => err && console.warn(err));
+      return next;
+    });
+  };
+
+  const saveProducts = () => saveShared('products', { list: products, removed: removedProductIds });
 
   const deleteProduct = (productId: string) => {
     publishProducts(products.filter((p) => p.id !== productId), [...removedProductIds, productId]);
@@ -627,6 +679,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         importGridCSV,
         addProduct,
         updateProduct,
+        updateMultipleProducts,
         deleteProduct,
         duplicateProduct,
         updateSiteSettings,
@@ -634,6 +687,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         logoutAdmin,
         refreshAdminData,
         savePriceMatrix,
+        saveProducts,
         customer,
         customerOrders,
         isPasswordRecovery,

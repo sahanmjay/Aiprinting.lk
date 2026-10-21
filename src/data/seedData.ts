@@ -62,6 +62,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
     isActive: true,
   })),
   heroBackgrounds: {},
+  categoryImages: {},
   gtmId: 'GTM-AIPRINT',
   metaPixelId: '494726470920317',
 };

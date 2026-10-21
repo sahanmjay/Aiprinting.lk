@@ -280,7 +280,7 @@ export const PRICE_TABLES: Record<string, PriceTable> = {
 export const optionId = (label: string) =>
   label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-const finishOf = (label: string) =>
+export const finishOf = (label: string) =>
   /metallic/i.test(label) ? 'metallic' : /matt/i.test(label) ? 'matte' : /gloss/i.test(label) ? 'gloss' : /laid|ribbed|vellum/i.test(label) ? 'ribbed' : undefined;
 
 export function tableOptionGroups(productId: string, t: PriceTable): OptionGroup[] {
