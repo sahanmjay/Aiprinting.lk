@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, MessageCircle, PackageCheck, Printer, ArrowRight, Download, Clock } from 'lucide-react';
+import { CheckCircle2, MessageCircle, PackageCheck, Printer, ArrowRight, Download, Clock, Truck, Store, MapPin } from 'lucide-react';
+import { useSalesBillPrint } from '../components/common/SalesBillDocument';
+import { calculateTotalItemQuantity } from '../lib/delivery';
 import { useStore } from '../context/StoreContext';
 import { formatLKR, formatItemPrice, getWhatsAppUrl } from '../lib/formatters';
 import confetti from 'canvas-confetti';
@@ -8,6 +10,7 @@ import confetti from 'canvas-confetti';
 export const OrderConfirmationPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { getOrderById, siteSettings } = useStore();
+  const { printSalesBill, salesBillDoc } = useSalesBillPrint(siteSettings);
 
   const order = getOrderById(id || '');
   // Set by the PayHere return_url / cancel_url
@@ -105,23 +108,76 @@ export const OrderConfirmationPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Customer & Delivery Summary */}
         <div className="bg-white p-6 rounded-lg border border-[#E6E0D6] shadow-xs space-y-4">
-          <h3 className="font-bold text-sm text-[#0F1B2D] border-b border-[#E6E0D6] pb-2 uppercase tracking-wider">
-            Delivery Information
-          </h3>
-
-          <div className="space-y-2 text-xs text-slate-700">
-            <div><strong>Recipient:</strong> {order.customerName}</div>
-            <div><strong>Telephone:</strong> {order.customerPhone}</div>
-            <div><strong>Email:</strong> {order.customerEmail}</div>
-            <div><strong>Delivery Address:</strong> {order.deliveryAddress}, {order.city}</div>
-            <div><strong>District:</strong> {order.district} District</div>
-            <div><strong>Estimated Delivery:</strong> 1–2 Working Days (Courier Dispatch)</div>
+          <div className="flex justify-between items-center border-b border-[#E6E0D6] pb-2">
+            <h3 className="font-bold text-sm text-[#0F1B2D] uppercase tracking-wider">
+              {order.deliveryMethod === 'pickup' ? 'Shop Collection Details' : 'Courier Delivery Information'}
+            </h3>
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase flex items-center gap-1 ${
+                order.deliveryMethod === 'pickup'
+                  ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                  : 'bg-blue-100 text-blue-900 border border-blue-200'
+              }`}
+            >
+              {order.deliveryMethod === 'pickup' ? (
+                <>
+                  <Store className="w-3 h-3 text-amber-700" />
+                  Customer Pickup
+                </>
+              ) : (
+                <>
+                  <Truck className="w-3 h-3 text-blue-700" />
+                  Courier Delivery
+                </>
+              )}
+            </span>
           </div>
 
-          <div className="pt-2 border-t border-slate-100 text-xs">
-            <span className="text-slate-500">Payment Selected:</span>{' '}
-            <strong className="uppercase text-[#0F1B2D]">{order.paymentMethod.replace('_', ' ')}</strong>{' '}
-            ({order.paymentStatus})
+          <div className="space-y-2 text-xs text-slate-700">
+            <div><strong>Customer Name:</strong> {order.customerName}</div>
+            <div><strong>Telephone:</strong> {order.customerPhone}</div>
+            <div><strong>Email:</strong> {order.customerEmail}</div>
+
+            {order.deliveryMethod === 'pickup' ? (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded text-slate-700 space-y-1">
+                <div className="font-bold text-emerald-900 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-emerald-700" />
+                  Collection Location:
+                </div>
+                <div className="text-[11px] leading-relaxed">
+                  11/A Gangarama Road, Werahara, Boralesgamuwa
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  Open Mon–Sat 8:30 AM – 6:30 PM (Hotline: {siteSettings.hotline})
+                </div>
+                <div className="text-[11px] font-semibold text-emerald-800 pt-0.5">
+                  Delivery Charge: Rs. 0.00 (Free Pickup)
+                </div>
+              </div>
+            ) : (
+              <>
+                <div><strong>Delivery Address:</strong> {order.deliveryAddress}, {order.city}</div>
+                <div><strong>District:</strong> {order.district} District</div>
+                <div><strong>Estimated Delivery:</strong> 1–2 Working Days (Courier Dispatch)</div>
+                <div><strong>Delivery Fee:</strong> {formatLKR(order.deliveryFee)}</div>
+              </>
+            )}
+          </div>
+
+          <div className="pt-2 border-t border-slate-100 text-xs flex justify-between items-center">
+            <div>
+              <span className="text-slate-500">Payment:</span>{' '}
+              <strong className="uppercase text-[#0F1B2D]">{order.paymentMethod.replace('_', ' ')}</strong>{' '}
+              ({order.paymentStatus})
+            </div>
+            <button
+              type="button"
+              onClick={() => printSalesBill(order)}
+              className="text-[#D6342C] font-bold text-xs hover:underline flex items-center gap-1"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Print Bill</span>
+            </button>
           </div>
         </div>
 
@@ -189,14 +245,20 @@ export const OrderConfirmationPage: React.FC = () => {
           ))}
         </div>
 
-        <div className="pt-3 border-t border-[#E6E0D6] space-y-1 text-xs">
+        <div className="pt-3 border-t border-[#E6E0D6] space-y-1.5 text-xs">
+          <div className="flex justify-between text-slate-600">
+            <span>Total Items Quantity:</span>
+            <span className="font-semibold">{order.totalQuantity || calculateTotalItemQuantity(order.items)} unit(s)</span>
+          </div>
           <div className="flex justify-between text-slate-600">
             <span>Subtotal:</span>
             <span>{formatLKR(order.subtotal)}</span>
           </div>
           <div className="flex justify-between text-slate-600">
-            <span>Delivery Fee:</span>
-            <span>{formatLKR(order.deliveryFee)}</span>
+            <span>Delivery Charge ({order.deliveryMethod === 'pickup' ? 'Customer Pickup' : 'Courier'}):</span>
+            <span className={order.deliveryMethod === 'pickup' ? 'font-bold text-emerald-700' : ''}>
+              {order.deliveryMethod === 'pickup' ? 'Rs. 0.00 (Free)' : formatLKR(order.deliveryFee)}
+            </span>
           </div>
           <div className="flex justify-between text-base font-bold text-[#0F1B2D] pt-2 border-t border-[#E6E0D6]">
             <span>Total Paid / Due:</span>
@@ -205,7 +267,15 @@ export const OrderConfirmationPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex justify-center gap-4 pt-4">
+      <div className="flex flex-wrap justify-center gap-4 pt-4">
+        <button
+          type="button"
+          onClick={() => printSalesBill(order)}
+          className="px-6 py-2.5 bg-white border-2 border-[#0F1B2D] text-[#0F1B2D] hover:bg-[#0F1B2D] hover:text-white text-xs font-bold rounded transition-colors flex items-center gap-2 shadow-xs"
+        >
+          <Printer className="w-4 h-4" />
+          <span>Print Official Sales Bill</span>
+        </button>
         <Link
           to="/shop"
           className="px-6 py-2.5 bg-[#0F1B2D] text-white text-xs font-bold rounded hover:bg-[#182A45] transition-colors"
@@ -213,6 +283,7 @@ export const OrderConfirmationPage: React.FC = () => {
           Explore More Products
         </Link>
       </div>
+      {salesBillDoc}
     </div>
   );
 };

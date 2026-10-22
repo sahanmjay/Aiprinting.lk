@@ -3,6 +3,9 @@ import { useNavigate, Link } from 'react-router-dom';
 import {
   ShieldCheck,
   Truck,
+  Store,
+  MapPin,
+  AlertCircle,
   CreditCard,
   Building2,
   UploadCloud,
@@ -18,7 +21,7 @@ import { SRI_LANKA_DISTRICTS } from '../data/seedData';
 import { PaymentMethod } from '../types';
 
 export const CheckoutPage: React.FC = () => {
-  const { cart, cartSubtotal, cartTotal, siteSettings, createOrder, customer } = useStore();
+  const { cart, cartSubtotal, cartTotal, siteSettings, createOrder, customer, deliveryMethod, setDeliveryMethod, cartTotalQuantity, cartDeliveryCalculation, cartDeliveryFee } = useStore();
   const navigate = useNavigate();
 
   // Form Fields
@@ -82,9 +85,14 @@ export const CheckoutPage: React.FC = () => {
     if (!customerPhone.trim() || !isValidSriLankanPhone(customerPhone)) {
       errs.phone = 'Valid Sri Lankan mobile or landline required (e.g. 077 323 3533)';
     }
-    if (!deliveryAddress.trim()) errs.address = 'Street address is required';
-    if (!city.trim()) errs.city = 'City / Postal town is required';
-    if (!district) errs.district = 'District selection is required';
+    if (deliveryMethod === 'delivery') {
+      if (!deliveryAddress.trim()) errs.address = 'Street address is required';
+      if (!city.trim()) errs.city = 'City / Postal town is required';
+      if (!district) errs.district = 'District selection is required';
+      if (!cartDeliveryCalculation.isValid) {
+        errs.delivery = cartDeliveryCalculation.errorMessage || 'No delivery rate matches this order quantity.';
+      }
+    }
 
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -131,11 +139,16 @@ export const CheckoutPage: React.FC = () => {
         customerName,
         customerEmail,
         customerPhone,
-        deliveryAddress,
-        city,
-        district,
+        deliveryMethod,
+        totalQuantity: cartTotalQuantity,
+        deliveryAddress:
+          deliveryMethod === 'pickup'
+            ? deliveryAddress.trim() || 'Store Pickup: 11/A Gangarama Road, Werahara'
+            : deliveryAddress,
+        city: deliveryMethod === 'pickup' ? city.trim() || 'Boralesgamuwa' : city,
+        district: deliveryMethod === 'pickup' ? district || 'Colombo' : district,
         subtotal: cartSubtotal,
-        deliveryFee: siteSettings.deliveryFee,
+        deliveryFee: cartDeliveryFee,
         addonTotal: cart.reduce(
           (sum, i) => sum + i.selectedAddons.reduce((s, a) => s + a.price, 0),
           0
@@ -247,68 +260,201 @@ export const CheckoutPage: React.FC = () => {
             </div>
           </div>
 
-          {/* STEP 2: DELIVERY ADDRESS */}
-          <div className="bg-white p-6 rounded-lg border border-[#E6E0D6] shadow-xs space-y-4">
-            <h3 className="font-bold text-sm uppercase tracking-wider text-[#0F1B2D] flex items-center gap-2 border-b border-[#E6E0D6] pb-2">
-              <span className="w-5 h-5 rounded-full bg-[#0F1B2D] text-white text-[11px] flex items-center justify-center font-bold">2</span>
-              <span>Delivery Details (All 25 Districts)</span>
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div className="sm:col-span-2 space-y-1">
-                <label className="font-bold text-slate-700">Street Address & Premises *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 11/A Gangarama Road, Werahara"
-                  value={deliveryAddress}
-                  onChange={(e) => setDeliveryAddress(e.target.value)}
-                  className={`w-full p-2.5 bg-[#FAF8F5] border rounded focus:bg-white focus:outline-hidden ${
-                    errors.address ? 'border-red-500' : 'border-[#E6E0D6]'
-                  }`}
-                />
-                {errors.address && <p className="text-red-500 text-[11px]">{errors.address}</p>}
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">City / Postal Town *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Boralesgamuwa"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  className={`w-full p-2.5 bg-[#FAF8F5] border rounded focus:bg-white focus:outline-hidden ${
-                    errors.city ? 'border-red-500' : 'border-[#E6E0D6]'
-                  }`}
-                />
-                {errors.city && <p className="text-red-500 text-[11px]">{errors.city}</p>}
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">District *</label>
-                <select
-                  value={district}
-                  onChange={(e) => setDistrict(e.target.value)}
-                  className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden font-medium"
-                >
-                  {SRI_LANKA_DISTRICTS.map((dist) => (
-                    <option key={dist} value={dist}>
-                      {dist} District
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="sm:col-span-2 space-y-1">
-                <label className="font-bold text-slate-700">Delivery Notes (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Near supermarket junction, call upon arrival"
-                  value={specialInstructions}
-                  onChange={(e) => setSpecialInstructions(e.target.value)}
-                  className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden"
-                />
-              </div>
+          {/* STEP 2: DELIVERY METHOD & DETAILS */}
+          <div className="bg-white p-6 rounded-lg border border-[#E6E0D6] shadow-xs space-y-5">
+            <div className="border-b border-[#E6E0D6] pb-3">
+              <h3 className="font-bold text-sm uppercase tracking-wider text-[#0F1B2D] flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-[#0F1B2D] text-white text-[11px] flex items-center justify-center font-bold">2</span>
+                <span>Delivery Method & Destination</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Choose between doorstep courier delivery across Sri Lanka or free shop collection from Boralesgamuwa.
+              </p>
             </div>
+
+            {/* Delivery Method Choice Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setDeliveryMethod('delivery')}
+                className={`p-4 rounded-lg border text-left transition-all relative flex flex-col justify-between ${
+                  deliveryMethod === 'delivery'
+                    ? 'border-[#0F1B2D] bg-[#0F1B2D]/5 ring-2 ring-[#0F1B2D]'
+                    : 'border-[#E6E0D6] bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-[#0F1B2D] flex items-center gap-1.5">
+                      <Truck className="w-4 h-4 text-[#D6342C]" />
+                      Courier Delivery
+                    </span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+                      Island-Wide
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Delivered directly to your address in any of the 25 districts.
+                  </p>
+                </div>
+                <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
+                  <span className="text-slate-500 text-[11px]">Delivery Charge:</span>
+                  <span className="font-bold text-[#0F1B2D]">
+                    {cartDeliveryCalculation.isValid ? formatLKR(cartDeliveryFee) : 'Check range'}
+                  </span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDeliveryMethod('pickup')}
+                className={`p-4 rounded-lg border text-left transition-all relative flex flex-col justify-between ${
+                  deliveryMethod === 'pickup'
+                    ? 'border-emerald-600 bg-emerald-50/50 ring-2 ring-emerald-600'
+                    : 'border-[#E6E0D6] bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-[#0F1B2D] flex items-center gap-1.5">
+                      <Store className="w-4 h-4 text-emerald-600" />
+                      Customer Pickup
+                    </span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 uppercase">
+                      Free Rs. 0.00
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Collect for free directly from our shop in Boralesgamuwa.
+                  </p>
+                </div>
+                <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
+                  <span className="text-slate-500 text-[11px]">Pickup Fee:</span>
+                  <span className="font-bold text-emerald-700">Rs. 0.00 (Free)</span>
+                </div>
+              </button>
+            </div>
+
+            {deliveryMethod === 'pickup' ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 space-y-3 text-xs">
+                <div className="flex items-start gap-3">
+                  <MapPin className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
+                  <div className="space-y-1 text-slate-700 text-xs">
+                    <div className="font-bold text-sm text-[#0F1B2D]">Ai Printing Solutions — Shop Collection</div>
+                    <div><strong>Address:</strong> 11/A Gangarama Road, Werahara, Boralesgamuwa</div>
+                    <div className="text-[11px] text-slate-600">
+                      <strong>Collection Hours:</strong> Monday – Saturday: 8:30 AM – 6:30 PM (Closed on Poya & Sundays)
+                    </div>
+                    <div className="text-[11px] text-slate-600">
+                      <strong>Contact:</strong> Hotline {siteSettings.hotline} · Landline {siteSettings.landline}
+                    </div>
+                    <div className="text-[11px] text-emerald-800 font-semibold pt-1">
+                      ✓ Delivery charge is automatically set to Rs. 0.00. We will notify you by SMS / WhatsApp once your prints are boxed and ready for collection.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-emerald-200/60">
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Collection Notes / Person Collecting (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. My driver / colleague will collect, vehicle WP CAA-1234"
+                    value={specialInstructions}
+                    onChange={(e) => setSpecialInstructions(e.target.value)}
+                    className="w-full p-2.5 bg-white border border-emerald-300 rounded focus:outline-hidden"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="p-3 bg-[#FAF8F5] border border-[#E6E0D6] rounded flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <Truck className="w-4 h-4 text-[#D6342C]" />
+                    <span className="text-slate-700">
+                      Order Quantity: <strong>{cartTotalQuantity} unit(s)</strong>
+                    </span>
+                  </div>
+                  {cartDeliveryCalculation.matchedRule ? (
+                    <span className="text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-[11px] font-semibold">
+                      Tier: {cartDeliveryCalculation.matchedRule.minQty}–{cartDeliveryCalculation.matchedRule.maxQty} items → {formatLKR(cartDeliveryFee)}
+                    </span>
+                  ) : !cartDeliveryCalculation.isValid ? (
+                    <span className="text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded text-[11px] font-bold">
+                      {cartDeliveryCalculation.errorMessage}
+                    </span>
+                  ) : (
+                    <span className="text-slate-600 font-semibold">
+                      Standard Fee: {formatLKR(cartDeliveryFee)}
+                    </span>
+                  )}
+                </div>
+
+                {errors.delivery && (
+                  <div className="p-3 bg-red-50 border border-red-300 rounded text-red-800 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{errors.delivery}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div className="sm:col-span-2 space-y-1">
+                    <label className="font-bold text-slate-700">Street Address & Premises *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 11/A Gangarama Road, Werahara"
+                      value={deliveryAddress}
+                      onChange={(e) => setDeliveryAddress(e.target.value)}
+                      className={`w-full p-2.5 bg-[#FAF8F5] border rounded focus:bg-white focus:outline-hidden ${
+                        errors.address ? 'border-red-500' : 'border-[#E6E0D6]'
+                      }`}
+                    />
+                    {errors.address && <p className="text-red-500 text-[11px]">{errors.address}</p>}
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">City / Postal Town *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Boralesgamuwa"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      className={`w-full p-2.5 bg-[#FAF8F5] border rounded focus:bg-white focus:outline-hidden ${
+                        errors.city ? 'border-red-500' : 'border-[#E6E0D6]'
+                      }`}
+                    />
+                    {errors.city && <p className="text-red-500 text-[11px]">{errors.city}</p>}
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">District *</label>
+                    <select
+                      value={district}
+                      onChange={(e) => setDistrict(e.target.value)}
+                      className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden font-medium"
+                    >
+                      {SRI_LANKA_DISTRICTS.map((dist) => (
+                        <option key={dist} value={dist}>
+                          {dist} District
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2 space-y-1">
+                    <label className="font-bold text-slate-700">Delivery Notes (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Near supermarket junction, call upon arrival"
+                      value={specialInstructions}
+                      onChange={(e) => setSpecialInstructions(e.target.value)}
+                      className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* STEP 3: PAYMENT METHOD */}
@@ -492,12 +638,20 @@ export const CheckoutPage: React.FC = () => {
 
             <div className="space-y-2 text-xs pt-2 border-t border-[#E6E0D6]">
               <div className="flex justify-between text-slate-600">
-                <span>Subtotal</span>
+                <span>Items Subtotal</span>
                 <span className="font-semibold">{formatLKR(cartSubtotal)}</span>
               </div>
               <div className="flex justify-between text-slate-600">
-                <span>Island-Wide Delivery</span>
-                <span className="font-semibold">{formatLKR(siteSettings.deliveryFee)}</span>
+                <span>Total Item Quantity</span>
+                <span className="font-semibold">{cartTotalQuantity} unit(s)</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>
+                  {deliveryMethod === 'pickup' ? 'Customer Pickup' : 'Courier Delivery'}
+                </span>
+                <span className={`font-semibold ${deliveryMethod === 'pickup' ? 'text-emerald-700' : ''}`}>
+                  {deliveryMethod === 'pickup' ? 'Rs. 0.00 (Free)' : formatLKR(cartDeliveryFee)}
+                </span>
               </div>
               <div className="pt-2 border-t border-[#E6E0D6] flex justify-between items-baseline font-bold text-base text-[#0F1B2D]">
                 <span>{hasPriceToConfirm ? 'Total so far' : 'Total Amount Due'}</span>
@@ -507,7 +661,7 @@ export const CheckoutPage: React.FC = () => {
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || (deliveryMethod === 'delivery' && !cartDeliveryCalculation.isValid)}
               className="w-full py-4 bg-[#D6342C] hover:bg-[#B8251E] disabled:bg-slate-400 text-white font-bold text-xs rounded transition-all flex items-center justify-center gap-2 shadow-md"
             >
               <Lock className="w-4 h-4" />

@@ -101,6 +101,7 @@ export interface CartItem {
   productId: string;
   product: Product;
   selectedOptions: CartItemOption[];
+  quantity?: number; // order quantity / packages count (defaults to 1)
   quantityCount: number; // actual units printed (e.g. 1000 cards)
   unitPrice: number; // price per single piece in LKR
   itemPrice: number; // base print price for quantity selection
@@ -110,6 +111,15 @@ export interface CartItem {
   specialInstructions?: string;
   lineTotal: number;
   priceToConfirm?: boolean; // product had no price yet — staff confirm it before printing
+}
+
+export type DeliveryMethod = 'delivery' | 'pickup';
+
+export interface DeliveryRule {
+  id: string;
+  minQty: number; // e.g. 1
+  maxQty: number; // e.g. 5
+  charge: number; // delivery fee in LKR
 }
 
 export type OrderStatus = 'new' | 'confirmed' | 'in_production' | 'ready' | 'delivered' | 'cancelled';
@@ -139,11 +149,14 @@ export interface Order {
   customerName: string;
   customerEmail: string;
   customerPhone: string;
+  deliveryMethod?: DeliveryMethod; // 'delivery' | 'pickup' (defaults to 'delivery')
   deliveryAddress: string;
   city: string;
   district: string;
+  totalQuantity?: number; // total item quantity in order
   subtotal: number;
   deliveryFee: number;
+  discountTotal?: number; // discounts applied
   addonTotal: number;
   total: number;
   paymentMethod: PaymentMethod;
@@ -230,6 +243,7 @@ export interface SiteSettings {
   hoursSaturday: string;
   hoursSunday: string;
   deliveryFee: number;
+  deliveryRules?: DeliveryRule[]; // configurable quantity-based delivery charges
   defaultArtworkFee?: number; // store-wide default fee for "Design it for me" (defaults to 500)
   announcementText: string;
   bankDetails: {

@@ -12,6 +12,8 @@ import {
   SiteSettings,
   PriceMatrixCell,
   QuoteStatus,
+  DeliveryMethod,
+  DeliveryRule,
 } from '../types';
 import {
   SEED_PRODUCTS,
@@ -21,6 +23,11 @@ import {
 } from '../data/seedData';
 import { generateOrderNumber, generateQuoteNumber } from '../lib/formatters';
 import { supabase, toRow, fromRow } from '../lib/supabase';
+import {
+  calculateTotalItemQuantity,
+  calculateDeliveryCharge,
+  DeliveryCalculationResult,
+} from '../lib/delivery';
 
 interface StoreContextType {
   products: Product[];
@@ -37,14 +44,20 @@ interface StoreContextType {
   // Cart operations
   addToCart: (item: CartItem) => void;
   removeFromCart: (itemId: string) => void;
+  updateCartItemQuantity: (itemId: string, quantity: number) => void;
   clearCart: () => void;
   cartCount: number;
+  cartTotalQuantity: number;
   cartSubtotal: number;
+  cartDeliveryFee: number;
+  cartDeliveryCalculation: DeliveryCalculationResult;
   cartTotal: number;
+  deliveryMethod: DeliveryMethod;
+  setDeliveryMethod: (method: DeliveryMethod) => void;
 
   // Ordering
   createOrder: (orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>) => Promise<Order>;
-  updateOrder: (orderId: string, changes: Partial<Pick<Order, 'orderStatus' | 'paymentStatus'>>) => Promise<void>;
+  updateOrder: (orderId: string, changes: Partial<Order>) => Promise<void>;
   getOrderById: (orderId: string) => Order | undefined;
   trackOrder: (orderNumber: string, phone: string) => Promise<Order | null>;
 
@@ -117,6 +130,10 @@ function save(key: string, value: unknown) {
 const withDefaults = (saved: Partial<SiteSettings>): SiteSettings => ({
   ...DEFAULT_SITE_SETTINGS,
   ...saved,
+  deliveryRules:
+    saved.deliveryRules && saved.deliveryRules.length > 0
+      ? saved.deliveryRules
+      : DEFAULT_SITE_SETTINGS.deliveryRules,
   bankDetails: { ...DEFAULT_SITE_SETTINGS.bankDetails, ...saved.bankDetails },
   socialLinks: { ...DEFAULT_SITE_SETTINGS.socialLinks, ...saved.socialLinks },
   clientLogos: saved.clientLogos && saved.clientLogos.length > 0 ? saved.clientLogos : DEFAULT_SITE_SETTINGS.clientLogos,
@@ -327,9 +344,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (isAdminLoggedIn) refreshAdminData();
   }, [isAdminLoggedIn]);
 
+  // Delivery Method state
+  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>(() => load('aiprint_delivery_method', () => 'delivery'));
+  useEffect(() => save('aiprint_delivery_method', deliveryMethod), [deliveryMethod]);
+
   // Cart helper functions
   const addToCart = (item: CartItem) => {
-    setCart((prev) => [...prev, item]);
+    const qty = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1;
+    setCart((prev) => [...prev, { ...item, quantity: qty }]);
+  };
+
+  const updateCartItemQuantity = (itemId: string, quantity: number) => {
+    setCart((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const validQty = Math.max(1, Math.floor(quantity || 1));
+        const singleUnitBase = item.itemPrice + item.selectedAddons.reduce((s, a) => s + a.price, 0);
+        return {
+          ...item,
+          quantity: validQty,
+          lineTotal: item.priceToConfirm ? 0 : singleUnitBase * validQty,
+        };
+      })
+    );
   };
 
   const removeFromCart = (itemId: string) => {
@@ -341,8 +378,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const cartCount = cart.length;
+  const cartTotalQuantity = useMemo(() => calculateTotalItemQuantity(cart), [cart]);
+
+  const cartDeliveryCalculation = useMemo(
+    () => calculateDeliveryCharge(deliveryMethod, cartTotalQuantity, siteSettings.deliveryRules, siteSettings.deliveryFee),
+    [deliveryMethod, cartTotalQuantity, siteSettings.deliveryRules, siteSettings.deliveryFee]
+  );
+
+  const cartDeliveryFee = cartDeliveryCalculation.deliveryCharge;
   const cartSubtotal = cart.reduce((sum, item) => sum + item.lineTotal, 0);
-  const cartTotal = cart.length > 0 ? cartSubtotal + siteSettings.deliveryFee : 0;
+  const cartTotal = cart.length > 0 ? cartSubtotal + cartDeliveryFee : 0;
 
   // Order Placement
   const createOrder = async (
@@ -352,10 +397,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Strip in-browser image previews; the real files are already in Storage (storagePath).
     const items = orderData.items.map((item) => ({
       ...item,
+      quantity: typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1,
       artworkFiles: item.artworkFiles.map(({ previewUrl: _p, dataUrl: _d, ...file }) => file),
     }));
+    const totalQuantity = orderData.totalQuantity ?? calculateTotalItemQuantity(items);
     const newOrder: Order = {
       ...orderData,
+      deliveryMethod: orderData.deliveryMethod ?? deliveryMethod,
+      totalQuantity,
       items,
       id: `ord-${crypto.randomUUID()}`,
       userId: customer?.id,
@@ -365,9 +414,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
     for (let attempt = 1; ; attempt++) {
       newOrder.orderNumber = generateOrderNumber();
-      const { error } = await supabase.from('orders').insert(toRow(newOrder));
-      if (!error) break;
-      if (error.code !== UNIQUE_VIOLATION || attempt === 3) throw error;
+      const row = toRow(newOrder);
+      let res = await supabase.from('orders').insert(row);
+      if (res.error && res.error.message && /column .* does not exist/i.test(res.error.message)) {
+        // Fallback for live database if migration was not run yet
+        delete (row as any).delivery_method;
+        delete (row as any).total_quantity;
+        delete (row as any).discount_total;
+        res = await supabase.from('orders').insert(row);
+      }
+      if (!res.error) break;
+      if (res.error.code !== UNIQUE_VIOLATION || attempt === 3) throw res.error;
     }
     setOrders((prev) => [newOrder, ...prev]);
     if (customer) setCustomerOrders((prev) => [newOrder, ...prev]);
@@ -375,14 +432,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return newOrder;
   };
 
-  const updateOrder = async (orderId: string, changes: Partial<Pick<Order, 'orderStatus' | 'paymentStatus'>>) => {
+  const updateOrder = async (orderId: string, changes: Partial<Order>) => {
     const patch = { ...changes, updatedAt: new Date().toISOString() };
-    const { error } = await supabase.from('orders').update(toRow(patch)).eq('id', orderId);
+    const row = toRow(patch);
+    let { error } = await supabase.from('orders').update(row).eq('id', orderId);
+    if (error && error.message && /column .* does not exist/i.test(error.message)) {
+      delete (row as any).delivery_method;
+      delete (row as any).total_quantity;
+      delete (row as any).discount_total;
+      const retry = await supabase.from('orders').update(row).eq('id', orderId);
+      error = retry.error;
+    }
     if (error) {
       alert(`Could not update order: ${error.message}`);
       return;
     }
     setAdminOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...patch } : o)));
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...patch } : o)));
+    setCustomerOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...patch } : o)));
   };
 
   const getOrderById = (orderId: string) => orders.find((o) => o.id === orderId);
@@ -658,10 +725,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isAdminLoggedIn,
         addToCart,
         removeFromCart,
+        updateCartItemQuantity,
         clearCart,
         cartCount,
+        cartTotalQuantity,
         cartSubtotal,
+        cartDeliveryFee,
+        cartDeliveryCalculation,
         cartTotal,
+        deliveryMethod,
+        setDeliveryMethod,
         createOrder,
         updateOrder,
         getOrderById,

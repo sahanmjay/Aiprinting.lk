@@ -1,11 +1,22 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Trash2, ArrowRight, ShoppingBag, ShieldCheck, FileCheck, Truck, ChevronLeft } from 'lucide-react';
+import { Trash2, ArrowRight, ShoppingBag, ShieldCheck, Truck, ChevronLeft, Store, AlertCircle } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatLKR, formatItemPrice } from '../lib/formatters';
 
 export const CartPage: React.FC = () => {
-  const { cart, removeFromCart, cartSubtotal, cartTotal, siteSettings } = useStore();
+  const {
+    cart,
+    removeFromCart,
+    updateCartItemQuantity,
+    cartTotalQuantity,
+    cartSubtotal,
+    cartDeliveryFee,
+    cartDeliveryCalculation,
+    cartTotal,
+    deliveryMethod,
+    setDeliveryMethod,
+  } = useStore();
   const navigate = useNavigate();
 
   if (cart.length === 0) {
@@ -40,7 +51,7 @@ export const CartPage: React.FC = () => {
             Review Order
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-[#0F1B2D]">
-            Shopping Cart ({cart.length} {cart.length === 1 ? 'item' : 'items'})
+            Shopping Cart ({cart.length} {cart.length === 1 ? 'line' : 'lines'} · {cartTotalQuantity} {cartTotalQuantity === 1 ? 'item' : 'items'})
           </h1>
         </div>
         <Link
@@ -74,7 +85,41 @@ export const CartPage: React.FC = () => {
                       {item.product.name}
                     </h3>
                     <div className="text-xs text-slate-500 font-medium">
-                      Unit price: {formatLKR(item.unitPrice)} / card
+                      Unit price: {formatLKR(item.unitPrice)} / piece
+                    </div>
+
+                    {/* Quantity Stepper */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-[11px] font-bold text-slate-600">Quantity:</span>
+                      <div className="inline-flex items-center border border-[#E6E0D6] rounded bg-[#FAF8F5]">
+                        <button
+                          type="button"
+                          onClick={() => updateCartItemQuantity(item.id, (item.quantity ?? 1) - 1)}
+                          disabled={(item.quantity ?? 1) <= 1}
+                          className="px-2.5 py-0.5 text-xs font-bold text-slate-600 hover:bg-slate-200 disabled:opacity-30 transition-colors"
+                          aria-label="Decrease quantity"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.quantity ?? 1}
+                          onChange={(e) => updateCartItemQuantity(item.id, parseInt(e.target.value, 10) || 1)}
+                          className="w-11 text-center text-xs font-bold text-[#0F1B2D] py-0.5 bg-white border-x border-[#E6E0D6] focus:outline-hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateCartItemQuantity(item.id, (item.quantity ?? 1) + 1)}
+                          className="px-2.5 py-0.5 text-xs font-bold text-slate-600 hover:bg-slate-200 transition-colors"
+                          aria-label="Increase quantity"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <span className="text-[11px] text-slate-400">
+                        ({(item.quantity ?? 1)} × {item.selectedOptions.find((o) => /quantity|set/i.test(o.groupName))?.valueLabel || 'set'})
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -85,7 +130,7 @@ export const CartPage: React.FC = () => {
                   </div>
                   <button
                     onClick={() => removeFromCart(item.id)}
-                    className="text-xs text-red-600 hover:underline inline-flex items-center gap-1 mt-1"
+                    className="text-xs text-red-600 hover:underline inline-flex items-center gap-1 mt-1 font-semibold"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Remove</span>
@@ -127,25 +172,96 @@ export const CartPage: React.FC = () => {
 
         {/* Order Summary Box */}
         <div className="lg:col-span-4 bg-white p-6 rounded-lg border border-[#E6E0D6] shadow-xs space-y-6">
-          <h3 className="font-bold text-base text-[#0F1B2D] border-b border-[#E6E0D6] pb-3">
+          <h3 className="font-bold text-base text-[#0F1B2D] border-b border-[#E6E0D6] pb-3 uppercase tracking-wider">
             Order Summary
           </h3>
 
-          <div className="space-y-3 text-xs">
+          {/* Delivery Method Selection Toggle */}
+          <div className="space-y-1.5">
+            <span className="font-bold text-xs text-[#0F1B2D] block">Delivery Method:</span>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setDeliveryMethod('delivery')}
+                className={`p-3 rounded border text-left transition-all ${
+                  deliveryMethod === 'delivery'
+                    ? 'border-[#0F1B2D] bg-[#0F1B2D]/5 font-bold text-[#0F1B2D] ring-1 ring-[#0F1B2D]'
+                    : 'border-[#E6E0D6] text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <Truck className="w-4 h-4 text-[#D6342C]" />
+                  <span className="text-xs">Delivery</span>
+                </div>
+                <span className="text-[10px] text-slate-500 font-normal block mt-1">Courier to your door</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDeliveryMethod('pickup')}
+                className={`p-3 rounded border text-left transition-all ${
+                  deliveryMethod === 'pickup'
+                    ? 'border-[#0F1B2D] bg-[#0F1B2D]/5 font-bold text-[#0F1B2D] ring-1 ring-[#0F1B2D]'
+                    : 'border-[#E6E0D6] text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <Store className="w-4 h-4 text-emerald-600" />
+                  <span className="text-xs">Pickup</span>
+                </div>
+                <span className="text-[10px] text-emerald-700 font-bold block mt-1">FREE · Werahara Shop</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3 text-xs pt-1">
             <div className="flex justify-between text-slate-600">
               <span>Items Subtotal</span>
               <span className="font-semibold text-slate-900">{formatLKR(cartSubtotal)}</span>
             </div>
 
             <div className="flex justify-between text-slate-600">
+              <span>Total Item Quantity</span>
+              <span className="font-semibold text-slate-900">{cartTotalQuantity} {cartTotalQuantity === 1 ? 'item' : 'items'}</span>
+            </div>
+
+            <div className="flex justify-between text-slate-600 items-baseline">
               <span className="flex items-center gap-1">
-                <Truck className="w-3.5 h-3.5 text-[#D6342C]" />
-                <span>Island-Wide Delivery (1–2 Days)</span>
+                {deliveryMethod === 'pickup' ? (
+                  <>
+                    <Store className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Customer Pickup</span>
+                  </>
+                ) : (
+                  <>
+                    <Truck className="w-3.5 h-3.5 text-[#D6342C]" />
+                    <span>Delivery Charge</span>
+                  </>
+                )}
               </span>
               <span className="font-semibold text-slate-900">
-                {formatLKR(siteSettings.deliveryFee)}
+                {deliveryMethod === 'pickup' ? (
+                  <span className="text-emerald-700 font-bold">Rs. 0.00 (Free)</span>
+                ) : cartDeliveryCalculation.isValid ? (
+                  formatLKR(cartDeliveryFee)
+                ) : (
+                  <span className="text-red-600 font-bold">Rate Unavailable</span>
+                )}
               </span>
             </div>
+
+            {deliveryMethod === 'delivery' && cartDeliveryCalculation.matchedRule && (
+              <div className="text-[11px] text-slate-500 bg-[#FAF8F5] p-2 rounded border border-[#E6E0D6]">
+                Applied Tier: {cartDeliveryCalculation.matchedRule.minQty}–{cartDeliveryCalculation.matchedRule.maxQty} items @ {formatLKR(cartDeliveryCalculation.matchedRule.charge)}
+              </div>
+            )}
+
+            {deliveryMethod === 'delivery' && !cartDeliveryCalculation.isValid && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{cartDeliveryCalculation.errorMessage}</span>
+              </div>
+            )}
 
             <div className="pt-3 border-t border-[#E6E0D6] flex justify-between items-baseline">
               <span className="text-sm font-bold text-[#0F1B2D]">Total Due (LKR)</span>
@@ -155,9 +271,10 @@ export const CartPage: React.FC = () => {
 
           <button
             onClick={() => navigate('/checkout')}
-            className="w-full py-3.5 bg-[#D6342C] hover:bg-[#B8251E] text-white font-bold text-xs rounded transition-colors flex items-center justify-center gap-2 shadow-sm"
+            disabled={deliveryMethod === 'delivery' && !cartDeliveryCalculation.isValid}
+            className="w-full py-3.5 bg-[#D6342C] hover:bg-[#B8251E] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-xs rounded transition-colors flex items-center justify-center gap-2 shadow-sm"
           >
-            <span>Proceed to Single-Page Checkout</span>
+            <span>Proceed to Checkout</span>
             <ArrowRight className="w-4 h-4" />
           </button>
 
@@ -175,3 +292,4 @@ export const CartPage: React.FC = () => {
     </div>
   );
 };
+

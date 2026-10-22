@@ -11,6 +11,10 @@ import {
   LogOut,
   Download,
   Upload,
+  Printer,
+  Store,
+  Truck,
+  Info,
   Percent,
   CheckCircle2,
   Clock,
@@ -38,11 +42,13 @@ import {
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatLKR, formatItemPrice, getWhatsAppUrl } from '../lib/formatters';
+import { useSalesBillPrint } from '../components/common/SalesBillDocument';
+import { calculateDeliveryCharge, calculateTotalItemQuantity, validateDeliveryRules } from '../lib/delivery';
 import { openStoredFile, downloadStoredFile, uploadImage, deleteUploadedImage, IMAGE_GUIDE } from '../lib/supabase';
 import { HERO_SLIDES } from '../components/home/HeroShowcase';
 import { DEFAULT_SITE_SETTINGS } from '../data/seedData';
 import { tableOptionGroups, optionId, finishOf } from '../data/priceTables';
-import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product, SiteSettings, SocialLinks, OptionValue } from '../types';
+import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product, SiteSettings, SocialLinks, OptionValue, DeliveryMethod, DeliveryRule } from '../types';
 
 const MAX_PRODUCT_PHOTOS = 4;
 
@@ -167,6 +173,15 @@ export const AdminPage: React.FC = () => {
   // Inline editing state for paper stock names
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
   const [editingStockName, setEditingStockName] = useState('');
+
+  const { printSalesBill, salesBillDoc } = useSalesBillPrint(siteSettings);
+
+  // Delivery Rules Editor State
+  const [newTierMin, setNewTierMin] = useState<number>(1);
+  const [newTierMax, setNewTierMax] = useState<number>(5);
+  const [newTierCharge, setNewTierCharge] = useState<number>(200);
+  const [editingTierId, setEditingTierId] = useState<string | null>(null);
+  const [tierError, setTierError] = useState<string>('');
 
   // Site Settings Tab State
   const [settingsForm, setSettingsForm] = useState(siteSettings);
@@ -557,19 +572,22 @@ export const AdminPage: React.FC = () => {
   const exportOrdersCSV = () => {
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const rows = [
-      ['Order #', 'Date', 'Customer', 'Phone', 'Email', 'City', 'District', 'Items', 'Payment Method', 'Payment Status', 'Order Status', 'Total (LKR)'],
+      ['Order #', 'Date', 'Customer', 'Phone', 'Email', 'Delivery Method', 'City', 'District', 'Total Quantity', 'Items', 'Payment Method', 'Payment Status', 'Order Status', 'Delivery Fee (LKR)', 'Total (LKR)'],
       ...filteredOrders.map((o) => [
         o.orderNumber,
         new Date(o.createdAt).toLocaleDateString('en-GB'),
         o.customerName,
         o.customerPhone,
         o.customerEmail,
+        o.deliveryMethod === 'pickup' ? 'Customer Pickup' : 'Courier Delivery',
         o.city,
         o.district,
+        o.totalQuantity || calculateTotalItemQuantity(o.items),
         o.items.map((i) => i.product.name).join('; '),
         o.paymentMethod.replace('_', ' '),
         PAYMENT_STATUS[o.paymentStatus].label,
         ORDER_STATUS[o.orderStatus].label,
+        o.deliveryFee,
         o.total,
       ]),
     ];
@@ -1531,6 +1549,7 @@ export const AdminPage: React.FC = () => {
                   <th className="p-3">Order</th>
                   <th className="p-3">Customer</th>
                   <th className="p-3">Items</th>
+                  <th className="p-3">Delivery</th>
                   <th className="p-3">Payment</th>
                   <th className="p-3">Total</th>
                   <th className="p-3">Status</th>
@@ -1540,7 +1559,7 @@ export const AdminPage: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {filteredOrders.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-500">
+                    <td colSpan={8} className="p-8 text-center text-slate-500">
                       No orders match these filters.
                     </td>
                   </tr>
@@ -1556,10 +1575,26 @@ export const AdminPage: React.FC = () => {
                       <div className="text-[11px] text-slate-500">{o.customerPhone} · {o.city}</div>
                     </td>
                     <td className="p-3 max-w-[180px]">
-                      <div className="truncate text-slate-700" title={o.items.map((i) => i.product.name).join(', ')}>
+                      <div className="truncate text-slate-700 font-medium" title={o.items.map((i) => i.product.name).join(', ')}>
                         {o.items[0]?.product.name ?? '—'}
                       </div>
-                      {o.items.length > 1 && <div className="text-[11px] text-slate-400">+{o.items.length - 1} more</div>}
+                      {o.items.length > 1 && <div className="text-[11px] text-slate-400">+{o.items.length - 1} more item(s)</div>}
+                    </td>
+                    <td className="p-3">
+                      {o.deliveryMethod === 'pickup' ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-900 border border-amber-200">
+                          <Store className="w-3 h-3 text-amber-700" />
+                          Pickup
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-100 text-blue-900 border border-blue-200">
+                          <Truck className="w-3 h-3 text-blue-700" />
+                          Delivery
+                        </span>
+                      )}
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        {o.totalQuantity || calculateTotalItemQuantity(o.items)} units · {o.deliveryMethod === 'pickup' ? 'Rs. 0' : formatLKR(o.deliveryFee)}
+                      </div>
                     </td>
                     <td className="p-3">
                       <div className="uppercase text-[11px] font-semibold text-slate-700">{o.paymentMethod.replace('_', ' ')}</div>
@@ -1641,7 +1676,12 @@ export const AdminPage: React.FC = () => {
                   <div><strong>Customer:</strong> {selectedOrder.customerName}</div>
                   <div><strong>Phone:</strong> {selectedOrder.customerPhone}</div>
                   <div><strong>Email:</strong> {selectedOrder.customerEmail}</div>
-                  <div><strong>Delivery Address:</strong> {selectedOrder.deliveryAddress}, {selectedOrder.city} ({selectedOrder.district})</div>
+                  <div>
+                    <strong>Destination / Collection:</strong>{' '}
+                    {selectedOrder.deliveryMethod === 'pickup'
+                      ? 'Shop Collection: 11/A Gangarama Road, Werahara, Boralesgamuwa'
+                      : `${selectedOrder.deliveryAddress}, ${selectedOrder.city} (${selectedOrder.district} District)`}
+                  </div>
                   <div><strong>Payment Method:</strong> {selectedOrder.paymentMethod.replace('_', ' ')}</div>
                   <div><strong>Order Status:</strong> {ORDER_STATUS[selectedOrder.orderStatus].label}</div>
                   <label className="flex items-center gap-2">
@@ -1661,6 +1701,63 @@ export const AdminPage: React.FC = () => {
                       <option value="failed">Failed</option>
                     </select>
                   </label>
+
+                  {/* Delivery Method Toggle & Recalculate */}
+                  <div className="col-span-2 p-3 bg-[#FAF8F5] border border-[#E6E0D6] rounded space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
+                        {selectedOrder.deliveryMethod === 'pickup' ? (
+                          <Store className="w-4 h-4 text-emerald-600" />
+                        ) : (
+                          <Truck className="w-4 h-4 text-[#D6342C]" />
+                        )}
+                        Delivery Method:
+                      </span>
+                      <div className="flex items-center gap-1 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newMethod: DeliveryMethod = 'delivery';
+                            const totalQty = selectedOrder.totalQuantity || calculateTotalItemQuantity(selectedOrder.items);
+                            const calc = calculateDeliveryCharge(newMethod, totalQty, siteSettings.deliveryRules, siteSettings.deliveryFee);
+                            const newFee = calc.deliveryCharge;
+                            const newTotal = selectedOrder.subtotal - (selectedOrder.discountTotal || 0) + newFee;
+                            updateOrder(selectedOrder.id, { deliveryMethod: newMethod, deliveryFee: newFee, total: newTotal });
+                            setSelectedOrder({ ...selectedOrder, deliveryMethod: newMethod, deliveryFee: newFee, total: newTotal });
+                          }}
+                          className={`px-2.5 py-1 rounded font-bold transition-all ${
+                            selectedOrder.deliveryMethod !== 'pickup'
+                              ? 'bg-[#0F1B2D] text-white shadow-xs'
+                              : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          🚚 Courier Delivery
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newMethod: DeliveryMethod = 'pickup';
+                            const newFee = 0;
+                            const newTotal = selectedOrder.subtotal - (selectedOrder.discountTotal || 0) + newFee;
+                            updateOrder(selectedOrder.id, { deliveryMethod: newMethod, deliveryFee: newFee, total: newTotal });
+                            setSelectedOrder({ ...selectedOrder, deliveryMethod: newMethod, deliveryFee: newFee, total: newTotal });
+                          }}
+                          className={`px-2.5 py-1 rounded font-bold transition-all ${
+                            selectedOrder.deliveryMethod === 'pickup'
+                              ? 'bg-emerald-700 text-white shadow-xs'
+                              : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          🏬 Customer Pickup
+                        </button>
+                      </div>
+                    </div>
+                    <div className="text-[11px] text-slate-600 flex flex-wrap justify-between gap-2 pt-1 border-t border-slate-200">
+                      <span>Total Item Quantity: <strong>{selectedOrder.totalQuantity || calculateTotalItemQuantity(selectedOrder.items)} units</strong></span>
+                      <span>Delivery Charge: <strong>{selectedOrder.deliveryMethod === 'pickup' ? 'Rs. 0.00 (Customer Pickup - Free)' : formatLKR(selectedOrder.deliveryFee)}</strong></span>
+                      <span>Final Order Total: <strong className="text-[#D6342C]">{formatLKR(selectedOrder.total)}</strong></span>
+                    </div>
+                  </div>
                   {selectedOrder.bankSlipUrl && (
                     <div className="flex items-center gap-3">
                       <button
@@ -1741,6 +1838,14 @@ export const AdminPage: React.FC = () => {
                 </div>
 
                 <div className="flex flex-wrap justify-end gap-2 pt-4 border-t border-[#E6E0D6]">
+                  <button
+                    type="button"
+                    onClick={() => printSalesBill(selectedOrder)}
+                    className="px-4 py-2 bg-white border border-[#0F1B2D] text-[#0F1B2D] hover:bg-[#0F1B2D] hover:text-white text-xs font-bold rounded flex items-center gap-1.5 shadow-xs transition-colors"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Print Sales Bill
+                  </button>
                   <a
                     href={orderWhatsAppUrl(selectedOrder)}
                     target="_blank"
@@ -3345,7 +3450,7 @@ export const AdminPage: React.FC = () => {
             </div>
 
             <div className="space-y-1">
-              <label className="font-bold text-slate-700">Standard Island-Wide Delivery Fee (LKR)</label>
+              <label className="font-bold text-slate-700">Fallback / Standard Delivery Fee (LKR)</label>
               <input
                 type="number"
                 value={settingsForm.deliveryFee}
@@ -3354,6 +3459,279 @@ export const AdminPage: React.FC = () => {
                 }
                 className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded font-bold"
               />
+              <p className="text-[11px] text-slate-500">Applied when no quantity tier matches or as baseline courier fee.</p>
+            </div>
+
+            {/* Quantity-Based Delivery Charge Tiers Configuration */}
+            <div className="sm:col-span-2 pt-4 border-t border-[#E6E0D6] space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#0F1B2D] flex items-center gap-1.5">
+                    <Truck className="w-4 h-4 text-[#D6342C]" />
+                    Quantity-Based Delivery Charge Tiers
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Configure tiered delivery rates based on the total quantity of items in an order. For Customer Pickup, delivery fee is always Rs. 0.00.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const defaultTiers: DeliveryRule[] = [
+                      { id: 'rule-1', minQty: 1, maxQty: 5, charge: 200 },
+                      { id: 'rule-2', minQty: 6, maxQty: 10, charge: 350 },
+                      { id: 'rule-3', minQty: 11, maxQty: 20, charge: 500 },
+                      { id: 'rule-4', minQty: 21, maxQty: 50, charge: 750 },
+                      { id: 'rule-5', minQty: 51, maxQty: 1000, charge: 1200 },
+                    ];
+                    editSettings({ deliveryRules: defaultTiers });
+                    setTierError('');
+                  }}
+                  className="px-2.5 py-1 text-[11px] font-bold text-slate-600 border border-slate-300 rounded hover:bg-slate-100 self-start sm:self-auto"
+                >
+                  Reset to Default Tiers
+                </button>
+              </div>
+
+              {/* Validation Warning Alert */}
+              {(() => {
+                const valError = validateDeliveryRules(settingsForm.deliveryRules ?? []);
+                if (valError) {
+                  return (
+                    <div className="p-3 bg-red-50 border border-red-300 rounded text-red-800 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{valError}</span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              {tierError && (
+                <div className="p-2.5 bg-amber-50 border border-amber-300 rounded text-amber-900 text-xs">
+                  {tierError}
+                </div>
+              )}
+
+              {/* Tiers Table */}
+              <div className="bg-[#FAF8F5] border border-[#E6E0D6] rounded-lg overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 border-b border-[#E6E0D6] text-slate-600 font-bold uppercase text-[10px]">
+                    <tr>
+                      <th className="p-2.5">Total Quantity Range</th>
+                      <th className="p-2.5 text-right">Delivery Charge (LKR)</th>
+                      <th className="p-2.5 text-right w-24">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E6E0D6]">
+                    {(settingsForm.deliveryRules ?? []).length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="p-4 text-center text-slate-500 text-xs">
+                          No tiered rules configured yet. The fallback delivery fee ({formatLKR(settingsForm.deliveryFee)}) will apply.
+                        </td>
+                      </tr>
+                    ) : (
+                      (settingsForm.deliveryRules ?? [])
+                        .slice()
+                        .sort((a, b) => a.minQty - b.minQty)
+                        .map((rule) => {
+                          const isEditing = editingTierId === rule.id;
+                          return (
+                            <tr key={rule.id} className="hover:bg-white transition-colors">
+                              <td className="p-2.5 font-medium text-slate-800">
+                                {isEditing ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      value={newTierMin}
+                                      onChange={(e) => setNewTierMin(parseInt(e.target.value) || 1)}
+                                      className="w-16 p-1 bg-white border border-slate-300 rounded font-bold"
+                                    />
+                                    <span>to</span>
+                                    <input
+                                      type="number"
+                                      min={newTierMin}
+                                      value={newTierMax}
+                                      onChange={(e) => setNewTierMax(parseInt(e.target.value) || newTierMin)}
+                                      className="w-16 p-1 bg-white border border-slate-300 rounded font-bold"
+                                    />
+                                    <span className="text-slate-500">items</span>
+                                  </div>
+                                ) : (
+                                  <span className="font-bold text-[#0F1B2D]">
+                                    {rule.minQty} – {rule.maxQty} items
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-2.5 text-right font-bold text-[#D6342C]">
+                                {isEditing ? (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="50"
+                                    value={newTierCharge}
+                                    onChange={(e) => setNewTierCharge(parseFloat(e.target.value) || 0)}
+                                    className="w-24 p-1 bg-white border border-slate-300 rounded text-right font-bold"
+                                  />
+                                ) : (
+                                  formatLKR(rule.charge)
+                                )}
+                              </td>
+                              <td className="p-2.5 text-right">
+                                {isEditing ? (
+                                  <div className="flex items-center justify-end gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const updated = (settingsForm.deliveryRules ?? []).map((r) =>
+                                          r.id === rule.id
+                                            ? { ...r, minQty: newTierMin, maxQty: newTierMax, charge: newTierCharge }
+                                            : r
+                                        );
+                                        const valErr = validateDeliveryRules(updated);
+                                        if (valErr) {
+                                          setTierError(valErr);
+                                          return;
+                                        }
+                                        setTierError('');
+                                        editSettings({ deliveryRules: updated });
+                                        setEditingTierId(null);
+                                      }}
+                                      className="px-2 py-0.5 bg-emerald-600 text-white font-bold rounded text-[11px]"
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingTierId(null);
+                                        setTierError('');
+                                      }}
+                                      className="px-2 py-0.5 bg-slate-200 text-slate-700 font-bold rounded text-[11px]"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingTierId(rule.id);
+                                        setNewTierMin(rule.minQty);
+                                        setNewTierMax(rule.maxQty);
+                                        setNewTierCharge(rule.charge);
+                                        setTierError('');
+                                      }}
+                                      className="text-slate-600 hover:text-[#0F1B2D] p-1"
+                                      title="Edit tier"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const updated = (settingsForm.deliveryRules ?? []).filter((r) => r.id !== rule.id);
+                                        editSettings({ deliveryRules: updated });
+                                        setTierError('');
+                                      }}
+                                      className="text-slate-400 hover:text-red-600 p-1"
+                                      title="Delete tier"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Add New Tier Inline Form */}
+              <div className="p-3 bg-white border border-[#E6E0D6] rounded-lg space-y-2">
+                <span className="font-bold text-xs text-[#0F1B2D] block">Add New Quantity Tier</span>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Min Quantity</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 1"
+                      id="tier-min-input"
+                      defaultValue="1"
+                      className="w-full p-2 bg-[#FAF8F5] border border-slate-300 rounded text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Max Quantity</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 5"
+                      id="tier-max-input"
+                      defaultValue="5"
+                      className="w-full p-2 bg-[#FAF8F5] border border-slate-300 rounded text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Delivery Charge (LKR)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="50"
+                      placeholder="e.g. 200"
+                      id="tier-charge-input"
+                      defaultValue="200"
+                      className="w-full p-2 bg-[#FAF8F5] border border-slate-300 rounded text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const minEl = document.getElementById('tier-min-input') as HTMLInputElement | null;
+                        const maxEl = document.getElementById('tier-max-input') as HTMLInputElement | null;
+                        const chargeEl = document.getElementById('tier-charge-input') as HTMLInputElement | null;
+
+                        const minQty = parseInt(minEl?.value || '1', 10);
+                        const maxQty = parseInt(maxEl?.value || '5', 10);
+                        const charge = parseFloat(chargeEl?.value || '200');
+
+                        if (isNaN(minQty) || isNaN(maxQty) || isNaN(charge)) {
+                          setTierError('Please provide valid numbers for quantity and charge.');
+                          return;
+                        }
+
+                        const newRule: DeliveryRule = {
+                          id: 'rule-' + Date.now(),
+                          minQty,
+                          maxQty,
+                          charge,
+                        };
+
+                        const nextRules = [...(settingsForm.deliveryRules ?? []), newRule];
+                        const valErr = validateDeliveryRules(nextRules);
+                        if (valErr) {
+                          setTierError(valErr);
+                          return;
+                        }
+
+                        setTierError('');
+                        editSettings({ deliveryRules: nextRules });
+                      }}
+                      className="w-full py-2 bg-[#0F1B2D] hover:bg-[#182A45] text-white text-xs font-bold rounded flex items-center justify-center gap-1.5 shadow-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Tier
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-1">
@@ -3746,6 +4124,7 @@ export const AdminPage: React.FC = () => {
           </section>
         </div>
       )}
+      {salesBillDoc}
     </div>
   );
 };

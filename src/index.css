@@ -117,9 +117,12 @@
 /* Quotation PDF: while printing a quote, show only the quotation document */
 @media print {
   @page { size: A4; margin: 14mm; }
-  body.printing-quote > #root { display: none !important; }
-  body.printing-quote { background: #fff !important; }
-  .quotation-doc { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  body.printing-quote > #root,
+  body.printing-bill > #root { display: none !important; }
+  body.printing-quote,
+  body.printing-bill { background: #fff !important; }
+  .quotation-doc,
+  .sales-bill-doc { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
 
 /* AI PRINTING loader (src/components/ui/loading-lines.tsx) */

@@ -100,6 +100,8 @@ CREATE TABLE IF NOT EXISTS public.orders (
     city TEXT NOT NULL,
     district TEXT NOT NULL,
     subtotal NUMERIC(12, 2) NOT NULL,
+    delivery_method TEXT NOT NULL DEFAULT 'delivery',
+    total_quantity INTEGER NOT NULL DEFAULT 1,
     delivery_fee NUMERIC(12, 2) NOT NULL DEFAULT 400.00,
     addon_total NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
     total NUMERIC(12, 2) NOT NULL,
@@ -386,3 +388,7 @@ CREATE POLICY "Admin can manage public assets" ON storage.objects FOR ALL TO aut
 -- SELECT id, email FROM auth.users WHERE email = '<username>@admin.aiprintingsolutions.com'
 -- ON CONFLICT (id) DO NOTHING;
 -- ==============================================================================
+
+-- Incremental updates
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS delivery_method TEXT NOT NULL DEFAULT 'delivery';
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS total_quantity INTEGER NOT NULL DEFAULT 1;

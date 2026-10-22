@@ -59,6 +59,7 @@ export const ProductDetailPage: React.FC = () => {
   const [artworkFiles, setArtworkFiles] = useState<UploadedArtwork[]>(carried?.artworkFiles ?? []);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [specialInstructions, setSpecialInstructions] = useState(carried?.notes ?? '');
+  const [orderQuantity, setOrderQuantity] = useState<number>(1);
 
   // Active Tab below the fold
   const [activeTab, setActiveTab] = useState<'description' | 'specs' | 'delivery'>('description');
@@ -170,6 +171,7 @@ export const ProductDetailPage: React.FC = () => {
       productId: product.id,
       product,
       selectedOptions: selectedOptionsList,
+      quantity: orderQuantity,
       quantityCount,
       unitPrice,
       itemPrice: baseOptionPrice,
@@ -189,7 +191,7 @@ export const ProductDetailPage: React.FC = () => {
       artworkType,
       artworkFiles,
       specialInstructions,
-      lineTotal: isPriced ? totalPrice : 0,
+      lineTotal: isPriced ? totalPrice * orderQuantity : 0,
       priceToConfirm: !isPriced,
     };
 
@@ -693,13 +695,47 @@ export const ProductDetailPage: React.FC = () => {
 
           {/* CTAs: Add to Cart & WhatsApp */}
           <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between p-3 bg-[#FAF8F5] rounded border border-[#E6E0D6] text-xs">
+              <div>
+                <span className="font-bold text-[#0F1B2D] block">Order Quantity:</span>
+                <span className="text-[11px] text-slate-500">
+                  {orderQuantity} × {selectedQty?.label || 'Set'}
+                </span>
+              </div>
+              <div className="inline-flex items-center border border-[#E6E0D6] rounded bg-white shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setOrderQuantity(Math.max(1, orderQuantity - 1))}
+                  className="px-3 py-1 text-slate-700 hover:bg-slate-100 font-bold transition-colors"
+                  aria-label="Decrease quantity"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  min="1"
+                  value={orderQuantity}
+                  onChange={(e) => setOrderQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className="w-12 text-center text-xs font-bold text-[#0F1B2D] py-1 focus:outline-hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => setOrderQuantity(orderQuantity + 1)}
+                  className="px-3 py-1 text-slate-700 hover:bg-slate-100 font-bold transition-colors"
+                  aria-label="Increase quantity"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
             <button
               onClick={handleAddToCart}
               disabled={isUploading}
               className="w-full py-3.5 px-4 bg-[#D6342C] hover:bg-[#B8251E] text-white font-bold text-sm rounded shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 active:scale-99 disabled:opacity-60 disabled:cursor-wait"
             >
               <ShoppingBag className="w-4 h-4" />
-              <span>{isPriced ? `Add to Cart (${formatLKR(totalPrice)})` : 'Add to Cart — price to be confirmed'}</span>
+              <span>{isPriced ? `Add to Cart (${formatLKR(totalPrice * orderQuantity)})` : 'Add to Cart — price to be confirmed'}</span>
             </button>
 
             <a
