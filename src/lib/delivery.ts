@@ -1,115 +1,98 @@
-import { DeliveryMethod, DeliveryRule } from '../types';
+import type { DeliveryCombineMode, DeliveryMethod, Product, ProductDeliveryConfig } from '../types';
 
-export interface DeliveryCalculationResult {
-  deliveryCharge: number;
-  matchedRule?: DeliveryRule;
-  isValid: boolean;
-  errorMessage?: string;
-}
+type DeliveryItem = { quantity?: number; quantityCount: number; product: Pick<Product, 'deliveryConfig'> };
+
+const packages = (item: { quantity?: number }) =>
+  typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1;
+
+// Printed pieces in a quantity option label ("1,000 Cards" -> 1000); no number = 100
+export const parseQuantityLabel = (label: string): number => {
+  const match = label.replace(/,/g, '').match(/\d+/);
+  return match ? parseInt(match[0], 10) : 100;
+};
 
 /**
- * Calculates total delivery quantity (parcels) across all order items.
+ * Calculates total item quantity across all order items.
  * Each item has a `quantity` (e.g. 1 package / 2 sets), defaulting to 1.
- * When the item's category has a pieces-per-parcel size (e.g. 500 visiting cards),
- * each package counts as ceil(quantityCount / size) parcels, so 1,000 cards = 2 parcels.
  */
-export function calculateTotalItemQuantity(
-  items: Array<{ quantity?: number; quantityCount?: number; product?: { categoryId: string } }> = [],
-  parcelSizes: Record<string, number> = {}
-): number {
-  return items.reduce((sum, item) => {
-    const qty = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1;
-    const size = item.product ? parcelSizes[item.product.categoryId] : 0;
-    const parcels = size > 0 && item.quantityCount ? Math.ceil(item.quantityCount / size) : 1;
-    return sum + qty * parcels;
-  }, 0);
+export function calculateTotalItemQuantity(items: Array<{ quantity?: number }> = []): number {
+  return items.reduce((sum, item) => sum + packages(item), 0);
 }
 
 /**
- * Calculates delivery charge based on delivery method and total item quantity.
- * - Customer Pickup is always Rs. 0.00.
- * - Delivery looks up the configured quantity range rule.
- * - If no range matches, marks result as invalid with a descriptive error message.
+ * Delivery fee for one cart line, from its product's delivery config:
+ * - flat: flatFee once, or × packages when flatPerUnit
+ * - exact_qty: fee of the rate whose qty equals the printed quantity, × packages
+ * - range_tiers: fee of the tier containing printed quantity × packages
+ * No config, or no matching rate/tier = fallback fee.
+ */
+export function calculateItemDeliveryFee(item: DeliveryItem, storeFallbackFee: number): number {
+  const c = item.product.deliveryConfig;
+  if (!c) return storeFallbackFee;
+  const fallback = c.fallbackFee ?? storeFallbackFee;
+  const n = packages(item);
+  if (c.mode === 'flat') return c.flatFee * (c.flatPerUnit ? n : 1);
+  if (c.mode === 'exact_qty') {
+    const rate = c.exactQtyRates.find((r) => r.qty === item.quantityCount);
+    return rate ? rate.fee * n : fallback;
+  }
+  const total = item.quantityCount * n;
+  const tier = c.rangeTiers.find((t) => total >= t.minQty && total <= t.maxQty);
+  return tier ? tier.fee : fallback;
+}
+
+/**
+ * Order delivery charge. Customer Pickup is always Rs. 0.00.
+ * Several products ship as one parcel, so by default ('highest_plus_extra') the highest product fee is charged
+ * and every other product adds only what its fee exceeds the base courier fee by (its extra weight).
  */
 export function calculateDeliveryCharge(
   deliveryMethod: DeliveryMethod,
-  totalQuantity: number,
-  rules: DeliveryRule[] = [],
-  fallbackFee: number = 0
-): DeliveryCalculationResult {
-  if (deliveryMethod === 'pickup') {
-    return {
-      deliveryCharge: 0,
-      isValid: true,
-    };
-  }
-
-  if (totalQuantity <= 0) {
-    return {
-      deliveryCharge: 0,
-      isValid: true,
-    };
-  }
-
-  if (!rules || rules.length === 0) {
-    // If no rules configured at all, fallback to the base flat fee
-    return {
-      deliveryCharge: fallbackFee,
-      isValid: true,
-    };
-  }
-
-  // Find matching range
-  const matched = rules.find((r) => totalQuantity >= r.minQty && totalQuantity <= r.maxQty);
-  if (matched) {
-    return {
-      deliveryCharge: matched.charge,
-      matchedRule: matched,
-      isValid: true,
-    };
-  }
-
-  return {
-    deliveryCharge: 0,
-    isValid: false,
-    errorMessage: `No delivery charge rule matches a total quantity of ${totalQuantity} ${
-      totalQuantity === 1 ? 'item' : 'items'
-    }. Please select Customer Pickup or contact us for a custom rate.`,
-  };
+  items: DeliveryItem[],
+  baseFee: number,
+  combine: DeliveryCombineMode = 'highest_plus_extra'
+): number {
+  if (deliveryMethod === 'pickup' || items.length === 0) return 0;
+  const fees = items.map((i) => calculateItemDeliveryFee(i, baseFee)).sort((a, b) => b - a);
+  if (combine === 'sum') return fees.reduce((s, f) => s + f, 0);
+  if (combine === 'highest') return fees[0];
+  return fees[0] + fees.slice(1).reduce((s, f) => s + Math.max(0, f - baseFee), 0);
 }
 
 /**
- * Validates a list of delivery rules to prevent negative values, min > max,
- * and overlapping quantity ranges.
- * Returns null if all rules are valid, or an error message string if invalid.
+ * Validates a product's delivery config: no negative fees, min ≤ max, no overlapping ranges, no duplicate exact quantities.
+ * Returns null if valid, or an error message.
  */
-export function validateDeliveryRules(rules: DeliveryRule[]): string | null {
-  if (!rules || rules.length === 0) {
-    return 'At least one delivery charge rule is required.';
+export function validateDeliveryConfig(c: ProductDeliveryConfig): string | null {
+  const bad = (n: number) => typeof n !== 'number' || isNaN(n) || n < 0;
+  if (c.mode === 'flat' && bad(c.flatFee)) return 'Flat delivery fee cannot be negative.';
+  if (c.fallbackFee !== undefined && bad(c.fallbackFee)) return 'Fallback delivery fee cannot be negative.';
+
+  if (c.mode === 'exact_qty') {
+    if (c.exactQtyRates.length === 0) return 'Add at least one quantity rate.';
+    for (const r of c.exactQtyRates) {
+      if (!(r.qty >= 1)) return 'Each quantity must be 1 or greater.';
+      if (bad(r.fee)) return `Qty ${r.qty}: delivery fee cannot be negative.`;
+    }
+    const qtys = c.exactQtyRates.map((r) => r.qty);
+    const dup = qtys.find((q, i) => qtys.indexOf(q) !== i);
+    if (dup !== undefined) return `Quantity ${dup} is listed twice.`;
   }
 
-  for (let i = 0; i < rules.length; i++) {
-    const r = rules[i];
-    if (typeof r.minQty !== 'number' || isNaN(r.minQty) || r.minQty < 1) {
-      return `Rule #${i + 1}: Minimum quantity must be 1 or greater.`;
+  if (c.mode === 'range_tiers') {
+    if (c.rangeTiers.length === 0) return 'Add at least one quantity range.';
+    for (const t of c.rangeTiers) {
+      if (!(t.minQty >= 1)) return 'Minimum quantity must be 1 or greater.';
+      if (!(t.maxQty >= t.minQty)) return `Range ${t.minQty}–${t.maxQty}: maximum cannot be less than minimum.`;
+      if (bad(t.fee)) return `Range ${t.minQty}–${t.maxQty}: delivery fee cannot be negative.`;
     }
-    if (typeof r.maxQty !== 'number' || isNaN(r.maxQty) || r.maxQty < r.minQty) {
-      return `Rule #${i + 1}: Maximum quantity (${r.maxQty}) cannot be less than minimum quantity (${r.minQty}).`;
-    }
-    if (typeof r.charge !== 'number' || isNaN(r.charge) || r.charge < 0) {
-      return `Rule #${i + 1}: Delivery charge cannot be negative.`;
-    }
-  }
-
-  // Check for overlapping ranges between rules
-  for (let i = 0; i < rules.length; i++) {
-    for (let j = i + 1; j < rules.length; j++) {
-      const a = rules[i];
-      const b = rules[j];
-      const overlapStart = Math.max(a.minQty, b.minQty);
-      const overlapEnd = Math.min(a.maxQty, b.maxQty);
-      if (overlapStart <= overlapEnd) {
-        return `Overlapping quantity ranges detected: Range ${a.minQty}–${a.maxQty} overlaps with Range ${b.minQty}–${b.maxQty}.`;
+    for (let i = 0; i < c.rangeTiers.length; i++) {
+      for (let j = i + 1; j < c.rangeTiers.length; j++) {
+        const a = c.rangeTiers[i];
+        const b = c.rangeTiers[j];
+        if (Math.max(a.minQty, b.minQty) <= Math.min(a.maxQty, b.maxQty)) {
+          return `Overlapping ranges: ${a.minQty}–${a.maxQty} and ${b.minQty}–${b.maxQty}.`;
+        }
       }
     }
   }

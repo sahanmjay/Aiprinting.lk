@@ -43,14 +43,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   hoursSaturday: 'Saturday: 8.30 AM – 1.00 PM',
   hoursSunday: 'Sunday: Closed',
   deliveryFee: 400,
-  deliveryRules: [
-    { id: 'dr-1', minQty: 1, maxQty: 5, charge: 200 },
-    { id: 'dr-2', minQty: 6, maxQty: 10, charge: 350 },
-    { id: 'dr-3', minQty: 11, maxQty: 20, charge: 500 },
-    { id: 'dr-4', minQty: 21, maxQty: 50, charge: 750 },
-    { id: 'dr-5', minQty: 51, maxQty: 1000, charge: 1200 },
-  ],
-  deliveryParcelSizes: { 'cat-visiting-cards': 500, 'cat-bill-books': 10, 'cat-leaflets': 1000 },
+  deliveryCombineMode: 'highest_plus_extra',
   defaultArtworkFee: 500,
   announcementText: 'Island-wide delivery in 1–2 days · Free proofing check on all orders',
   promo: {

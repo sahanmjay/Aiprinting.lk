@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Trash2, ArrowRight, ShoppingBag, ShieldCheck, Truck, ChevronLeft, Store, AlertCircle } from 'lucide-react';
+import { Trash2, ArrowRight, ShoppingBag, ShieldCheck, Truck, ChevronLeft, Store } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatLKR, formatItemPrice } from '../lib/formatters';
 
@@ -12,7 +12,6 @@ export const CartPage: React.FC = () => {
     cartTotalQuantity,
     cartSubtotal,
     cartDeliveryFee,
-    cartDeliveryCalculation,
     cartTotal,
     deliveryMethod,
     setDeliveryMethod,
@@ -221,8 +220,8 @@ export const CartPage: React.FC = () => {
             </div>
 
             <div className="flex justify-between text-slate-600">
-              <span>Delivery Parcels</span>
-              <span className="font-semibold text-slate-900">{cartTotalQuantity}</span>
+              <span>Total Item Quantity</span>
+              <span className="font-semibold text-slate-900">{cartTotalQuantity} {cartTotalQuantity === 1 ? 'item' : 'items'}</span>
             </div>
 
             <div className="flex justify-between text-slate-600 items-baseline">
@@ -242,26 +241,11 @@ export const CartPage: React.FC = () => {
               <span className="font-semibold text-slate-900">
                 {deliveryMethod === 'pickup' ? (
                   <span className="text-emerald-700 font-bold">Rs. 0.00 (Free)</span>
-                ) : cartDeliveryCalculation.isValid ? (
-                  formatLKR(cartDeliveryFee)
                 ) : (
-                  <span className="text-red-600 font-bold">Rate Unavailable</span>
+                  formatLKR(cartDeliveryFee)
                 )}
               </span>
             </div>
-
-            {deliveryMethod === 'delivery' && cartDeliveryCalculation.matchedRule && (
-              <div className="text-[11px] text-slate-500 bg-[#FAF8F5] p-2 rounded border border-[#E6E0D6]">
-                Applied Tier: {cartDeliveryCalculation.matchedRule.minQty}–{cartDeliveryCalculation.matchedRule.maxQty} items @ {formatLKR(cartDeliveryCalculation.matchedRule.charge)}
-              </div>
-            )}
-
-            {deliveryMethod === 'delivery' && !cartDeliveryCalculation.isValid && (
-              <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{cartDeliveryCalculation.errorMessage}</span>
-              </div>
-            )}
 
             <div className="pt-3 border-t border-[#E6E0D6] flex justify-between items-baseline">
               <span className="text-sm font-bold text-[#0F1B2D]">Total Due (LKR)</span>
@@ -271,7 +255,6 @@ export const CartPage: React.FC = () => {
 
           <button
             onClick={() => navigate('/checkout')}
-            disabled={deliveryMethod === 'delivery' && !cartDeliveryCalculation.isValid}
             className="w-full py-3.5 bg-[#D6342C] hover:bg-[#B8251E] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-xs rounded transition-colors flex items-center justify-center gap-2 shadow-sm"
           >
             <span>Proceed to Checkout</span>

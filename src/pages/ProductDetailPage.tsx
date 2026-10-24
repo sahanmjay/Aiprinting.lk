@@ -21,6 +21,7 @@ import { uploadFile } from '../lib/supabase';
 import { formatLKR, getWhatsAppUrl, formatFileSize, generateQuoteNumber } from '../lib/formatters';
 import { UploadedArtwork, CartItem, Product } from '../types';
 import { RegistrationMark } from '../components/common/RegistrationMark';
+import { parseQuantityLabel } from '../lib/delivery';
 import { useQuotationPrint, QuotationData, QuotationLine } from '../components/common/QuotationDocument';
 import { sidesOf, SIDES_LABEL, Sides } from '../data/printSides';
 
@@ -85,11 +86,7 @@ export const ProductDetailPage: React.FC = () => {
   const selectedQty = qtyGroup?.values.find((v) => v.id === qtyId);
 
   // Extract quantity number (e.g. "1,000 Cards" -> 1000)
-  const quantityCount = useMemo(() => {
-    if (!selectedQty) return 100;
-    const match = selectedQty.label.replace(/,/g, '').match(/\d+/);
-    return match ? parseInt(match[0], 10) : 100;
-  }, [selectedQty]);
+  const quantityCount = useMemo(() => (selectedQty ? parseQuantityLabel(selectedQty.label) : 100), [selectedQty]);
 
   const baseOptionPrice = useMemo(() => {
     if (!product.isVariable) return product.basePrice;

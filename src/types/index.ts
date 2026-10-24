@@ -78,6 +78,17 @@ export interface Product {
   specs?: Record<string, string>;
   artworkFee?: number; // fee added when customer selects "Design it for me" (defaults to 500)
   hasArtworkOption?: boolean; // whether to offer "Design it for me" option on this product (defaults to true)
+  deliveryConfig?: ProductDeliveryConfig; // unset = store fallback delivery fee
+}
+
+// How this product's courier fee is worked out. Quantities are printed pieces (e.g. 1000 cards).
+export interface ProductDeliveryConfig {
+  mode: 'flat' | 'exact_qty' | 'range_tiers';
+  flatFee: number;
+  flatPerUnit?: boolean; // flat fee × packages ordered, instead of once per cart line
+  exactQtyRates: { qty: number; fee: number }[]; // fee per package of exactly `qty` pieces
+  rangeTiers: { minQty: number; maxQty: number; fee: number }[];
+  fallbackFee?: number; // no rate/tier matches; unset = store fallback fee
 }
 
 export interface CartItemOption {
@@ -115,12 +126,8 @@ export interface CartItem {
 
 export type DeliveryMethod = 'delivery' | 'pickup';
 
-export interface DeliveryRule {
-  id: string;
-  minQty: number; // e.g. 1
-  maxQty: number; // e.g. 5
-  charge: number; // delivery fee in LKR
-}
+// How per-product fees combine for a cart with several products
+export type DeliveryCombineMode = 'highest_plus_extra' | 'highest' | 'sum';
 
 export type OrderStatus = 'new' | 'confirmed' | 'in_production' | 'ready' | 'delivered' | 'cancelled';
 export type PaymentMethod = 'payhere' | 'bank_transfer';
@@ -255,8 +262,7 @@ export interface SiteSettings {
   hoursSaturday: string;
   hoursSunday: string;
   deliveryFee: number;
-  deliveryRules?: DeliveryRule[]; // configurable quantity-based delivery charges
-  deliveryParcelSizes?: Record<string, number>; // categoryId -> printed pieces per parcel (unset = 1 parcel per cart line)
+  deliveryCombineMode?: DeliveryCombineMode; // defaults to 'highest_plus_extra'
   defaultArtworkFee?: number; // store-wide default fee for "Design it for me" (defaults to 500)
   announcementText: string;
   promo?: PromoSettings;

@@ -13,7 +13,6 @@ import {
   PriceMatrixCell,
   QuoteStatus,
   DeliveryMethod,
-  DeliveryRule,
 } from '../types';
 import {
   SEED_PRODUCTS,
@@ -23,11 +22,7 @@ import {
 } from '../data/seedData';
 import { generateOrderNumber, generateQuoteNumber } from '../lib/formatters';
 import { supabase, toRow, fromRow } from '../lib/supabase';
-import {
-  calculateTotalItemQuantity,
-  calculateDeliveryCharge,
-  DeliveryCalculationResult,
-} from '../lib/delivery';
+import { calculateTotalItemQuantity, calculateDeliveryCharge } from '../lib/delivery';
 
 interface StoreContextType {
   products: Product[];
@@ -50,7 +45,6 @@ interface StoreContextType {
   cartTotalQuantity: number;
   cartSubtotal: number;
   cartDeliveryFee: number;
-  cartDeliveryCalculation: DeliveryCalculationResult;
   cartTotal: number;
   deliveryMethod: DeliveryMethod;
   setDeliveryMethod: (method: DeliveryMethod) => void;
@@ -130,10 +124,6 @@ function save(key: string, value: unknown) {
 const withDefaults = (saved: Partial<SiteSettings>): SiteSettings => ({
   ...DEFAULT_SITE_SETTINGS,
   ...saved,
-  deliveryRules:
-    saved.deliveryRules && saved.deliveryRules.length > 0
-      ? saved.deliveryRules
-      : DEFAULT_SITE_SETTINGS.deliveryRules,
   bankDetails: { ...DEFAULT_SITE_SETTINGS.bankDetails, ...saved.bankDetails },
   socialLinks: { ...DEFAULT_SITE_SETTINGS.socialLinks, ...saved.socialLinks },
   clientLogos: saved.clientLogos && saved.clientLogos.length > 0 ? saved.clientLogos : DEFAULT_SITE_SETTINGS.clientLogos,
@@ -378,17 +368,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const cartCount = cart.length;
-  const cartTotalQuantity = useMemo(
-    () => calculateTotalItemQuantity(cart, siteSettings.deliveryParcelSizes),
-    [cart, siteSettings.deliveryParcelSizes]
-  );
+  const cartTotalQuantity = useMemo(() => calculateTotalItemQuantity(cart), [cart]);
 
-  const cartDeliveryCalculation = useMemo(
-    () => calculateDeliveryCharge(deliveryMethod, cartTotalQuantity, siteSettings.deliveryRules, siteSettings.deliveryFee),
-    [deliveryMethod, cartTotalQuantity, siteSettings.deliveryRules, siteSettings.deliveryFee]
+  const cartDeliveryFee = useMemo(
+    () => calculateDeliveryCharge(deliveryMethod, cart, siteSettings.deliveryFee, siteSettings.deliveryCombineMode),
+    [deliveryMethod, cart, siteSettings.deliveryFee, siteSettings.deliveryCombineMode]
   );
-
-  const cartDeliveryFee = cartDeliveryCalculation.deliveryCharge;
   const cartSubtotal = cart.reduce((sum, item) => sum + item.lineTotal, 0);
   const cartTotal = cart.length > 0 ? cartSubtotal + cartDeliveryFee : 0;
 
@@ -734,7 +719,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         cartTotalQuantity,
         cartSubtotal,
         cartDeliveryFee,
-        cartDeliveryCalculation,
         cartTotal,
         deliveryMethod,
         setDeliveryMethod,

@@ -5,7 +5,6 @@ import {
   Truck,
   Store,
   MapPin,
-  AlertCircle,
   CreditCard,
   Building2,
   UploadCloud,
@@ -21,7 +20,7 @@ import { SRI_LANKA_DISTRICTS } from '../data/seedData';
 import { PaymentMethod } from '../types';
 
 export const CheckoutPage: React.FC = () => {
-  const { cart, cartSubtotal, cartTotal, siteSettings, createOrder, customer, deliveryMethod, setDeliveryMethod, cartTotalQuantity, cartDeliveryCalculation, cartDeliveryFee } = useStore();
+  const { cart, cartSubtotal, cartTotal, siteSettings, createOrder, customer, deliveryMethod, setDeliveryMethod, cartTotalQuantity, cartDeliveryFee } = useStore();
   const navigate = useNavigate();
 
   // Form Fields
@@ -89,9 +88,6 @@ export const CheckoutPage: React.FC = () => {
       if (!deliveryAddress.trim()) errs.address = 'Street address is required';
       if (!city.trim()) errs.city = 'City / Postal town is required';
       if (!district) errs.district = 'District selection is required';
-      if (!cartDeliveryCalculation.isValid) {
-        errs.delivery = cartDeliveryCalculation.errorMessage || 'No delivery rate matches this order quantity.';
-      }
     }
 
     setErrors(errs);
@@ -300,7 +296,7 @@ export const CheckoutPage: React.FC = () => {
                 <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
                   <span className="text-slate-500 text-[11px]">Delivery Charge:</span>
                   <span className="font-bold text-[#0F1B2D]">
-                    {cartDeliveryCalculation.isValid ? formatLKR(cartDeliveryFee) : 'Check range'}
+                    {formatLKR(cartDeliveryFee)}
                   </span>
                 </div>
               </button>
@@ -376,27 +372,10 @@ export const CheckoutPage: React.FC = () => {
                       Order Quantity: <strong>{cartTotalQuantity} unit(s)</strong>
                     </span>
                   </div>
-                  {cartDeliveryCalculation.matchedRule ? (
-                    <span className="text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-[11px] font-semibold">
-                      Tier: {cartDeliveryCalculation.matchedRule.minQty}–{cartDeliveryCalculation.matchedRule.maxQty} items → {formatLKR(cartDeliveryFee)}
-                    </span>
-                  ) : !cartDeliveryCalculation.isValid ? (
-                    <span className="text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded text-[11px] font-bold">
-                      {cartDeliveryCalculation.errorMessage}
-                    </span>
-                  ) : (
-                    <span className="text-slate-600 font-semibold">
-                      Standard Fee: {formatLKR(cartDeliveryFee)}
-                    </span>
-                  )}
+                  <span className="text-slate-600 font-semibold">
+                    Delivery Fee: {formatLKR(cartDeliveryFee)}
+                  </span>
                 </div>
-
-                {errors.delivery && (
-                  <div className="p-3 bg-red-50 border border-red-300 rounded text-red-800 text-xs flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{errors.delivery}</span>
-                  </div>
-                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                   <div className="sm:col-span-2 space-y-1">
@@ -642,8 +621,8 @@ export const CheckoutPage: React.FC = () => {
                 <span className="font-semibold">{formatLKR(cartSubtotal)}</span>
               </div>
               <div className="flex justify-between text-slate-600">
-                <span>Delivery Parcels</span>
-                <span className="font-semibold">{cartTotalQuantity}</span>
+                <span>Total Item Quantity</span>
+                <span className="font-semibold">{cartTotalQuantity} unit(s)</span>
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>
@@ -661,7 +640,7 @@ export const CheckoutPage: React.FC = () => {
 
             <button
               type="submit"
-              disabled={isSubmitting || (deliveryMethod === 'delivery' && !cartDeliveryCalculation.isValid)}
+              disabled={isSubmitting}
               className="w-full py-4 bg-[#D6342C] hover:bg-[#B8251E] disabled:bg-slate-400 text-white font-bold text-xs rounded transition-all flex items-center justify-center gap-2 shadow-md"
             >
               <Lock className="w-4 h-4" />
