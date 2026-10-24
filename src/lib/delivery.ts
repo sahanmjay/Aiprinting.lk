@@ -8,15 +8,20 @@ export interface DeliveryCalculationResult {
 }
 
 /**
- * Calculates total item quantity across all order items.
+ * Calculates total delivery quantity (parcels) across all order items.
  * Each item has a `quantity` (e.g. 1 package / 2 sets), defaulting to 1.
+ * When the item's category has a pieces-per-parcel size (e.g. 500 visiting cards),
+ * each package counts as ceil(quantityCount / size) parcels, so 1,000 cards = 2 parcels.
  */
 export function calculateTotalItemQuantity(
-  items: Array<{ quantity?: number }> = []
+  items: Array<{ quantity?: number; quantityCount?: number; product?: { categoryId: string } }> = [],
+  parcelSizes: Record<string, number> = {}
 ): number {
   return items.reduce((sum, item) => {
     const qty = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1;
-    return sum + qty;
+    const size = item.product ? parcelSizes[item.product.categoryId] : 0;
+    const parcels = size > 0 && item.quantityCount ? Math.ceil(item.quantityCount / size) : 1;
+    return sum + qty * parcels;
   }, 0);
 }
 

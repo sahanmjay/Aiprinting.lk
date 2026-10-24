@@ -642,8 +642,8 @@ export const CheckoutPage: React.FC = () => {
                 <span className="font-semibold">{formatLKR(cartSubtotal)}</span>
               </div>
               <div className="flex justify-between text-slate-600">
-                <span>Total Item Quantity</span>
-                <span className="font-semibold">{cartTotalQuantity} unit(s)</span>
+                <span>Delivery Parcels</span>
+                <span className="font-semibold">{cartTotalQuantity}</span>
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>

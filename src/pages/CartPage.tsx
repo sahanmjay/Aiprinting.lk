@@ -221,8 +221,8 @@ export const CartPage: React.FC = () => {
             </div>
 
             <div className="flex justify-between text-slate-600">
-              <span>Total Item Quantity</span>
-              <span className="font-semibold text-slate-900">{cartTotalQuantity} {cartTotalQuantity === 1 ? 'item' : 'items'}</span>
+              <span>Delivery Parcels</span>
+              <span className="font-semibold text-slate-900">{cartTotalQuantity}</span>
             </div>
 
             <div className="flex justify-between text-slate-600 items-baseline">

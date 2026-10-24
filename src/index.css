@@ -187,3 +187,19 @@ html { -webkit-text-size-adjust: 100%; }
 .marquee-pause:hover .animate-marquee-reverse {
   animation-play-state: paused;
 }
+
+/* Client logos: every logo gets the same box, so wide and square marks read at a similar weight.
+   Assets should be cropped tight to the mark (see README → Client logo assets). */
+.client-logo-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 5 / 2;
+}
+
+.client-logo {
+  width: 80%;
+  height: 100%;
+  max-height: 64px;
+  object-fit: contain;
+}

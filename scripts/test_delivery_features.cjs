@@ -1,10 +1,12 @@
 const assert = require('assert');
 
 // Simulate the TypeScript delivery logic in CommonJS for automated unit testing
-function calculateTotalItemQuantity(items = []) {
+function calculateTotalItemQuantity(items = [], parcelSizes = {}) {
   return items.reduce((sum, item) => {
     const qty = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1;
-    return sum + qty;
+    const size = item.product ? parcelSizes[item.product.categoryId] : 0;
+    const parcels = size > 0 && item.quantityCount ? Math.ceil(item.quantityCount / size) : 1;
+    return sum + qty * parcels;
   }, 0);
 }
 
@@ -185,6 +187,26 @@ assert.strictEqual(historicalOrder.deliveryFee, 400);
 assert.strictEqual(historicalOrder.total, 2900);
 console.log('✓ PASS: Past completed sales records and bills remain intact.');
 
+console.log('\n--- TEST 8: Parcel-Based Quantity (Pieces per Parcel by Category) ---');
+const parcelSizes = { 'cat-visiting-cards': 500, 'cat-leaflets': 1000 };
+const vc = (quantityCount, quantity = 1) => ({ quantity, quantityCount, product: { categoryId: 'cat-visiting-cards' } });
+const tierRules = [
+  { id: 't1', minQty: 1, maxQty: 1, charge: 400 },
+  { id: 't2', minQty: 2, maxQty: 2, charge: 600 },
+  { id: 't3', minQty: 3, maxQty: 100, charge: 900 },
+];
+assert.strictEqual(calculateTotalItemQuantity([vc(100)], parcelSizes), 1);
+assert.strictEqual(calculateTotalItemQuantity([vc(500)], parcelSizes), 1);
+assert.strictEqual(calculateTotalItemQuantity([vc(501)], parcelSizes), 2);
+assert.strictEqual(calculateTotalItemQuantity([vc(1000, 2)], parcelSizes), 4);
+// Categories without a parcel size (or no sizes at all) keep the old 1-parcel-per-package behaviour
+assert.strictEqual(calculateTotalItemQuantity([{ quantity: 1, quantityCount: 5000, product: { categoryId: 'cat-posters' } }], parcelSizes), 1);
+assert.strictEqual(calculateTotalItemQuantity([vc(1000)]), 1);
+assert.strictEqual(calculateDeliveryCharge('delivery', calculateTotalItemQuantity([vc(100)], parcelSizes), tierRules).deliveryCharge, 400);
+assert.strictEqual(calculateDeliveryCharge('delivery', calculateTotalItemQuantity([vc(1000)], parcelSizes), tierRules).deliveryCharge, 600);
+assert.strictEqual(calculateDeliveryCharge('pickup', calculateTotalItemQuantity([vc(5000)], parcelSizes), tierRules).deliveryCharge, 0);
+console.log('✓ PASS: 100 cards = Rs. 400, 1,000 cards = 2 parcels = Rs. 600, pickup stays Rs. 0.');
+
 console.log('\n========================================');
-console.log('ALL 7 AUTOMATED VERIFICATION TESTS PASSED!');
+console.log('ALL 8 AUTOMATED VERIFICATION TESTS PASSED!');
 console.log('========================================');

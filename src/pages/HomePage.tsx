@@ -21,6 +21,7 @@ import { getWhatsAppUrl } from '../lib/formatters';
 import { FlowButton } from '../components/ui/flow-button';
 import { HeroBackdrop, HeroProductSlider, useHeroSlider, useHeroSlides } from '../components/home/HeroShowcase';
 import { CustomerLogoMarquee } from '../components/home/CustomerLogoMarquee';
+import { PromoModal } from '../components/home/PromoModal';
 
 export const HomePage: React.FC = () => {
   const { categories, products, siteSettings, getFromPrice } = useStore();
@@ -98,6 +99,8 @@ export const HomePage: React.FC = () => {
           </div>
         </div>
       </section>
+
+      <PromoModal promo={siteSettings.promo} />
 
       {/* INFINITE CUSTOMER LOGO MARQUEE BAR */}
       <CustomerLogoMarquee />
@@ -343,13 +346,13 @@ export const HomePage: React.FC = () => {
           </div>
           <ul className="bg-white p-6 sm:p-8 rounded-lg border border-[#E6E0D6] grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6 sm:gap-8 items-center">
             {clientLogos.map((logo) => (
-              <li key={logo.id} className="flex items-center justify-center h-16">
+              <li key={logo.id} className="client-logo-box w-full">
                 <img
                   src={logo.logoUrl}
                   alt={logo.companyName}
                   title={logo.companyName}
                   loading="lazy"
-                  className="max-h-full max-w-full object-contain transition-all duration-300 hover:scale-105"
+                  className="client-logo transition-all duration-300 hover:scale-105"
                 />
               </li>
             ))}

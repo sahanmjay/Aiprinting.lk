@@ -378,7 +378,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const cartCount = cart.length;
-  const cartTotalQuantity = useMemo(() => calculateTotalItemQuantity(cart), [cart]);
+  const cartTotalQuantity = useMemo(
+    () => calculateTotalItemQuantity(cart, siteSettings.deliveryParcelSizes),
+    [cart, siteSettings.deliveryParcelSizes]
+  );
 
   const cartDeliveryCalculation = useMemo(
     () => calculateDeliveryCharge(deliveryMethod, cartTotalQuantity, siteSettings.deliveryRules, siteSettings.deliveryFee),

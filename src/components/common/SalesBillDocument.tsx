@@ -171,8 +171,8 @@ export const SalesBillDocument: React.FC<{ order: Order; settings: SiteSettings 
 
         <div className="w-72 space-y-1.5 text-xs">
           <div className="flex justify-between text-slate-700">
-            <span>Total Item Quantity</span>
-            <span className="font-bold">{totalItemQty} unit(s)</span>
+            <span>Delivery Parcels</span>
+            <span className="font-bold">{totalItemQty}</span>
           </div>
           <div className="flex justify-between text-slate-700">
             <span>Items Subtotal</span>

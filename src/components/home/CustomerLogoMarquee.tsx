@@ -12,14 +12,14 @@ export const CustomerLogoMarquee: React.FC = () => {
   const renderLogoCard = (logo: CustomerLogoItem, index: number, prefix: string) => (
     <div
       key={`${prefix}-${logo.id}-${index}`}
-      className="shrink-0 mx-2 sm:mx-3 bg-white border border-[#E6E0D6] hover:border-[#009CF0]/60 rounded-xl px-4 py-2 sm:px-5 sm:py-3 h-15 sm:h-18 min-w-[130px] sm:min-w-[155px] max-w-[160px] sm:max-w-[180px] flex items-center justify-center shadow-2xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card select-none"
+      className="client-logo-box shrink-0 mx-2 sm:mx-3 w-[150px] sm:w-[180px] bg-white border border-[#E6E0D6] hover:border-[#009CF0]/60 rounded-xl shadow-2xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card select-none"
       title={`${logo.name} · ${logo.category}`}
     >
       <img
         src={logo.logoUrl}
         alt={logo.name}
         loading="lazy"
-        className="max-h-8 sm:max-h-10 max-w-[105px] sm:max-w-[125px] w-auto h-auto object-contain transition-all duration-300 group-hover/card:scale-105"
+        className="client-logo transition-all duration-300 group-hover/card:scale-105"
       />
     </div>
   );

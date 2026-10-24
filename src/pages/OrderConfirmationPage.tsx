@@ -247,8 +247,8 @@ export const OrderConfirmationPage: React.FC = () => {
 
         <div className="pt-3 border-t border-[#E6E0D6] space-y-1.5 text-xs">
           <div className="flex justify-between text-slate-600">
-            <span>Total Items Quantity:</span>
-            <span className="font-semibold">{order.totalQuantity || calculateTotalItemQuantity(order.items)} unit(s)</span>
+            <span>Delivery Parcels:</span>
+            <span className="font-semibold">{order.totalQuantity || calculateTotalItemQuantity(order.items)}</span>
           </div>
           <div className="flex justify-between text-slate-600">
             <span>Subtotal:</span>

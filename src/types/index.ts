@@ -230,6 +230,18 @@ export interface SocialLinks {
   linkedin: string;
 }
 
+// Homepage pop-up for seasonal greetings / offers. Change `id` to show a new campaign to visitors who dismissed the last one.
+export interface PromoSettings {
+  isActive: boolean;
+  id: string;
+  title: string;
+  message: string;
+  imageUrl: string; // empty = text-only
+  ctaText: string; // empty = no button
+  ctaLink: string;
+  dismissExpiryDays: number; // 0 = show again next visit (new browser session)
+}
+
 export interface SiteSettings {
   siteName: string;
   tagline: string;
@@ -244,8 +256,10 @@ export interface SiteSettings {
   hoursSunday: string;
   deliveryFee: number;
   deliveryRules?: DeliveryRule[]; // configurable quantity-based delivery charges
+  deliveryParcelSizes?: Record<string, number>; // categoryId -> printed pieces per parcel (unset = 1 parcel per cart line)
   defaultArtworkFee?: number; // store-wide default fee for "Design it for me" (defaults to 500)
   announcementText: string;
+  promo?: PromoSettings;
   bankDetails: {
     bankName: string;
     branch: string;

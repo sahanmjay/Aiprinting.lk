@@ -260,12 +260,12 @@ export const AboutPage: React.FC = () => {
                 className="bg-white rounded-xl p-3 sm:p-4 border border-[#E6E0D6] hover:border-[#009CF0]/60 shadow-2xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex flex-col items-center justify-between group cursor-default min-h-[120px] sm:min-h-[140px]"
                 title={`${logo.name} · ${logo.category}`}
               >
-                <div className="w-full h-14 sm:h-16 flex items-center justify-center p-1">
+                <div className="client-logo-box w-full">
                   <img
                     src={logo.logoUrl}
                     alt={logo.name}
                     loading="lazy"
-                    className="max-h-full max-w-full object-contain transition-all duration-300 group-hover:scale-105"
+                    className="client-logo transition-all duration-300 group-hover:scale-105"
                   />
                 </div>
                 <div className="w-full text-center mt-2 pt-2 border-t border-slate-100/80">

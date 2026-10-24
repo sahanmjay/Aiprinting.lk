@@ -48,7 +48,7 @@ import { openStoredFile, downloadStoredFile, uploadImage, deleteUploadedImage, I
 import { HERO_SLIDES } from '../components/home/HeroShowcase';
 import { DEFAULT_SITE_SETTINGS } from '../data/seedData';
 import { tableOptionGroups, optionId, finishOf } from '../data/priceTables';
-import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product, SiteSettings, SocialLinks, OptionValue, DeliveryMethod, DeliveryRule } from '../types';
+import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product, SiteSettings, SocialLinks, OptionValue, DeliveryMethod, DeliveryRule, PromoSettings } from '../types';
 
 const MAX_PRODUCT_PHOTOS = 4;
 
@@ -1593,7 +1593,7 @@ export const AdminPage: React.FC = () => {
                         </span>
                       )}
                       <div className="text-[10px] text-slate-500 mt-0.5">
-                        {o.totalQuantity || calculateTotalItemQuantity(o.items)} units · {o.deliveryMethod === 'pickup' ? 'Rs. 0' : formatLKR(o.deliveryFee)}
+                        {o.totalQuantity || calculateTotalItemQuantity(o.items)} parcel(s) ·{o.deliveryMethod === 'pickup' ? 'Rs. 0' : formatLKR(o.deliveryFee)}
                       </div>
                     </td>
                     <td className="p-3">
@@ -1753,7 +1753,7 @@ export const AdminPage: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-[11px] text-slate-600 flex flex-wrap justify-between gap-2 pt-1 border-t border-slate-200">
-                      <span>Total Item Quantity: <strong>{selectedOrder.totalQuantity || calculateTotalItemQuantity(selectedOrder.items)} units</strong></span>
+                      <span>Delivery Parcels: <strong>{selectedOrder.totalQuantity || calculateTotalItemQuantity(selectedOrder.items)}</strong></span>
                       <span>Delivery Charge: <strong>{selectedOrder.deliveryMethod === 'pickup' ? 'Rs. 0.00 (Customer Pickup - Free)' : formatLKR(selectedOrder.deliveryFee)}</strong></span>
                       <span>Final Order Total: <strong className="text-[#D6342C]">{formatLKR(selectedOrder.total)}</strong></span>
                     </div>
@@ -3471,7 +3471,7 @@ export const AdminPage: React.FC = () => {
                     Quantity-Based Delivery Charge Tiers
                   </h4>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Configure tiered delivery rates based on the total quantity of items in an order. For Customer Pickup, delivery fee is always Rs. 0.00.
+                    Configure tiered delivery rates based on the total number of parcels in an order (see Pieces per Parcel below). For Customer Pickup, delivery fee is always Rs. 0.00.
                   </p>
                 </div>
                 <button
@@ -3518,7 +3518,7 @@ export const AdminPage: React.FC = () => {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-100 border-b border-[#E6E0D6] text-slate-600 font-bold uppercase text-[10px]">
                     <tr>
-                      <th className="p-2.5">Total Quantity Range</th>
+                      <th className="p-2.5">Total Parcels Range</th>
                       <th className="p-2.5 text-right">Delivery Charge (LKR)</th>
                       <th className="p-2.5 text-right w-24">Actions</th>
                     </tr>
@@ -3734,6 +3734,33 @@ export const AdminPage: React.FC = () => {
               </div>
             </div>
 
+            <div className="sm:col-span-2 space-y-2">
+              <label className="font-bold text-slate-700">Pieces per Parcel (by Category)</label>
+              <p className="text-[11px] text-slate-500">
+                e.g. 500 for Visiting Cards makes 1,000 cards count as 2 parcels. Leave blank to count each cart item as 1 parcel.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                {categories.map((cat) => (
+                  <label key={cat.id} className="flex items-center justify-between gap-2 p-2 bg-[#FAF8F5] border border-[#E6E0D6] rounded">
+                    <span className="text-xs text-slate-700 truncate">{cat.name}</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={settingsForm.deliveryParcelSizes?.[cat.id] ?? ''}
+                      onChange={(e) => {
+                        const sizes = { ...(settingsForm.deliveryParcelSizes ?? {}) };
+                        const n = parseInt(e.target.value, 10);
+                        if (n > 0) sizes[cat.id] = n;
+                        else delete sizes[cat.id];
+                        editSettings({ deliveryParcelSizes: sizes });
+                      }}
+                      className="w-24 p-1.5 bg-white border border-[#E6E0D6] rounded text-right font-bold"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-1">
               <label className="font-bold text-slate-700">Default Artwork Design Fee (LKR)</label>
               <input
@@ -3778,6 +3805,82 @@ export const AdminPage: React.FC = () => {
                 className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded"
               />
             </div>
+
+            {/* Homepage promo / seasonal pop-up */}
+            {(() => {
+              const promo = settingsForm.promo ?? DEFAULT_SITE_SETTINGS.promo!;
+              const editPromo = (patch: Partial<PromoSettings>) => editSettings({ promo: { ...promo, ...patch } });
+              const field = 'w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded';
+              return (
+                <div className="sm:col-span-2 pt-3 border-t border-[#E6E0D6] grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2 flex items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-[#0F1B2D]">Homepage Promo Pop-up</h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Seasonal greeting or offer shown once when visitors land on the homepage. Change the Campaign ID to show a new pop-up to everyone again.
+                      </p>
+                    </div>
+                    <label className="flex items-center gap-2 font-bold text-slate-700 shrink-0">
+                      <input type="checkbox" checked={promo.isActive} onChange={(e) => editPromo({ isActive: e.target.checked })} />
+                      Active
+                    </label>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Title</label>
+                    <input type="text" value={promo.title} onChange={(e) => editPromo({ title: e.target.value })} className={field} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Campaign ID</label>
+                    <input type="text" value={promo.id} onChange={(e) => editPromo({ id: e.target.value.trim() })} className={field} />
+                  </div>
+                  <div className="sm:col-span-2 space-y-1">
+                    <label className="font-bold text-slate-700">Message</label>
+                    <textarea rows={2} value={promo.message} onChange={(e) => editPromo({ message: e.target.value })} className={field} />
+                  </div>
+                  <div className="sm:col-span-2 space-y-1">
+                    <label className="font-bold text-slate-700">Image</label>
+                    <div className="flex items-center gap-2">
+                      <input type="text" placeholder="https://… or leave blank for text only" value={promo.imageUrl} onChange={(e) => editPromo({ imageUrl: e.target.value })} className={field} />
+                      <UploadButton
+                        busy={imageBusy === 'promo'}
+                        label="Upload"
+                        onFile={async (file) => {
+                          setImageBusy('promo');
+                          try {
+                            // ponytail: an upload replaced before Save stays in Storage; fine at a few promos a year
+                            editPromo({ imageUrl: await uploadImage(file, { bucket: 'site-assets', maxSize: IMAGE_GUIDE.product.maxSize }) });
+                          } catch (err) {
+                            alert(`Upload failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+                          } finally {
+                            setImageBusy(null);
+                          }
+                        }}
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-500">Best: 1080 × 1080 px or 1200 × 900 px JPG/PNG.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Button Text</label>
+                    <input type="text" placeholder="Blank = no button" value={promo.ctaText} onChange={(e) => editPromo({ ctaText: e.target.value })} className={field} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Button Link</label>
+                    <input type="text" placeholder="/shop or https://…" value={promo.ctaLink} onChange={(e) => editPromo({ ctaLink: e.target.value })} className={field} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Hide After Closing (days)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={promo.dismissExpiryDays}
+                      onChange={(e) => editPromo({ dismissExpiryDays: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                      className={field}
+                    />
+                    <p className="text-[11px] text-slate-500">0 = show again on the visitor's next visit.</p>
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="sm:col-span-2 pt-3 border-t border-[#E6E0D6]">
               <h4 className="text-xs font-bold uppercase tracking-wider text-[#0F1B2D]">Bank Transfer Details</h4>

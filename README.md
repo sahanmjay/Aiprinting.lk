@@ -30,3 +30,12 @@ If you are developing a production application, we recommend enabling type-aware
 ```
 
 See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+
+## Client logo assets
+
+Logos render in a fixed 5:2 box (80% width, max 64px tall, `object-fit: contain`), so empty space inside the file makes the logo look small.
+
+- **Format:** transparent PNG or SVG (JPG only if the background is pure white).
+- **Size:** about 300 × 120 px for wide logos, 200 × 200 px for square crests. Make them at least 2× the display size so they stay sharp.
+- **Crop:** tight to the edges of the logo, with no more than about 4px of padding.
+- **Re-export these first:** `KDU.jpg` and `UOVT.png` (lots of empty space), `AV Productions.jpg` (logo is tiny inside the frame) and `ADB.jpg` (only about 60px, too low-resolution).
