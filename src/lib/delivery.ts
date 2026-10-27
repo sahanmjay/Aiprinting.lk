@@ -1,6 +1,29 @@
-import type { DeliveryCombineMode, DeliveryMethod, Product, ProductDeliveryConfig } from '../types';
+import type { DeliveryCombineMode, DeliveryMethod, DeliveryRates, Product, ProductDeliveryConfig } from '../types';
 
-type DeliveryItem = { quantity?: number; quantityCount: number; product: Pick<Product, 'deliveryConfig'> };
+type DeliveryItem = {
+  quantity?: number;
+  quantityCount: number;
+  product: Pick<Product, 'deliveryConfig' | 'optionGroups'>;
+  selectedOptions?: { valueId: string }[];
+};
+
+// Paper size in an option label ("A5 · 120gsm Art Paper" -> "A5")
+export const sizeOfLabel = (label: string): string | undefined => label.match(/\bA\d\b/)?.[0];
+
+// Distinct paper sizes offered by a product's options, e.g. ["A4", "A5"]
+export const productSizes = (product: Pick<Product, 'optionGroups'>): string[] => [
+  ...new Set((product.optionGroups ?? []).flatMap((g) => g.values.map((v) => sizeOfLabel(v.label)).filter((s): s is string => !!s))),
+];
+
+// Size of the option the customer picked, looked up by id in the product (not the label the cart sent)
+const selectedSize = (item: DeliveryItem): string | undefined => {
+  const ids = new Set((item.selectedOptions ?? []).map((o) => o.valueId));
+  for (const g of item.product.optionGroups ?? []) {
+    const v = g.values.find((x) => ids.has(x.id));
+    const size = v && sizeOfLabel(v.label);
+    if (size) return size;
+  }
+};
 
 const packages = (item: { quantity?: number }) =>
   typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1;
@@ -24,12 +47,15 @@ export function calculateTotalItemQuantity(items: Array<{ quantity?: number }> =
  * - flat: flatFee once, or × packages when flatPerUnit
  * - exact_qty: fee of the rate whose qty equals the printed quantity, × packages
  * - range_tiers: fee of the tier containing printed quantity × packages
+ * With size-specific fees, the selected size's rates are used (a size without its own rates uses the product's).
  * No config, or no matching rate/tier = fallback fee.
  */
 export function calculateItemDeliveryFee(item: DeliveryItem, storeFallbackFee: number): number {
-  const c = item.product.deliveryConfig;
-  if (!c) return storeFallbackFee;
-  const fallback = c.fallbackFee ?? storeFallbackFee;
+  const config = item.product.deliveryConfig;
+  if (!config) return storeFallbackFee;
+  const fallback = config.fallbackFee ?? storeFallbackFee;
+  const size = config.hasSizeSpecificFees ? selectedSize(item) : undefined;
+  const c: DeliveryRates = (size && config.variantDeliveryConfigs?.[size]) || config;
   const n = packages(item);
   if (c.mode === 'flat') return c.flatFee * (c.flatPerUnit ? n : 1);
   if (c.mode === 'exact_qty') {
@@ -63,10 +89,21 @@ export function calculateDeliveryCharge(
  * Validates a product's delivery config: no negative fees, min ≤ max, no overlapping ranges, no duplicate exact quantities.
  * Returns null if valid, or an error message.
  */
+const bad = (n: number) => typeof n !== 'number' || isNaN(n) || n < 0;
+
 export function validateDeliveryConfig(c: ProductDeliveryConfig): string | null {
-  const bad = (n: number) => typeof n !== 'number' || isNaN(n) || n < 0;
-  if (c.mode === 'flat' && bad(c.flatFee)) return 'Flat delivery fee cannot be negative.';
   if (c.fallbackFee !== undefined && bad(c.fallbackFee)) return 'Fallback delivery fee cannot be negative.';
+  if (c.hasSizeSpecificFees) {
+    for (const [size, rates] of Object.entries(c.variantDeliveryConfigs ?? {})) {
+      const error = validateRates(rates);
+      if (error) return `${size}: ${error}`;
+    }
+  }
+  return validateRates(c);
+}
+
+function validateRates(c: DeliveryRates): string | null {
+  if (c.mode === 'flat' && bad(c.flatFee)) return 'Flat delivery fee cannot be negative.';
 
   if (c.mode === 'exact_qty') {
     if (c.exactQtyRates.length === 0) return 'Add at least one quantity rate.';

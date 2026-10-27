@@ -22,6 +22,7 @@ import { formatLKR, getWhatsAppUrl, formatFileSize, generateQuoteNumber } from '
 import { UploadedArtwork, CartItem, Product } from '../types';
 import { RegistrationMark } from '../components/common/RegistrationMark';
 import { parseQuantityLabel } from '../lib/delivery';
+import { designFee, optionPrice } from '../lib/pricing';
 import { useQuotationPrint, QuotationData, QuotationLine } from '../components/common/QuotationDocument';
 import { sidesOf, SIDES_LABEL, Sides } from '../data/printSides';
 
@@ -32,7 +33,7 @@ export const ProductDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const carried = useLocation().state as CarriedChoices | null;
-  const { products, categories, priceMatrix, getPriceForOptions, getFromPrice, addToCart, siteSettings } = useStore();
+  const { products, categories, priceMatrix, getFromPrice, addToCart, siteSettings } = useStore();
 
   const product = useMemo(() => {
     return products.find((p) => p.slug === slug) || products[0];
@@ -88,16 +89,11 @@ export const ProductDetailPage: React.FC = () => {
   // Extract quantity number (e.g. "1,000 Cards" -> 1000)
   const quantityCount = useMemo(() => (selectedQty ? parseQuantityLabel(selectedQty.label) : 100), [selectedQty]);
 
-  const baseOptionPrice = useMemo(() => {
-    if (!product.isVariable) return product.basePrice;
-    if (!paperId || !qtyId) return 0;
-    return getPriceForOptions(product.id, paperId, qtyId);
-  }, [product, paperId, qtyId, getPriceForOptions]);
-
-  const productArtworkFee = product.artworkFee ?? siteSettings.defaultArtworkFee ?? 500;
+  // Same functions the server uses to re-price the order (src/lib/pricing.ts)
+  const baseOptionPrice = optionPrice(product, priceMatrix, paperId, qtyId);
+  const productArtworkFee = designFee(product, siteSettings, 'design');
   const allowsArtworkDesign = product.hasArtworkOption !== false;
-  const designFee = allowsArtworkDesign && artworkType === 'design' ? productArtworkFee : 0;
-  const totalPrice = baseOptionPrice + designFee;
+  const totalPrice = baseOptionPrice + designFee(product, siteSettings, artworkType);
   const unitPrice = quantityCount > 0 ? totalPrice / quantityCount : 0;
 
   // Artwork goes straight to Supabase Storage; the cart keeps only the storage path.

@@ -1,22 +1,73 @@
-// POST { orderId } -> the signed form fields for PayHere Checkout.
-// The amount comes from the saved order in the database, never from the browser request.
+// POST { orderId, expectedTotal } -> the signed form fields for PayHere Checkout.
+// The order is re-priced here from the saved catalogue (api/_pricing.js); browser prices are never trusted.
+// If the server price differs from the total the customer saw, nothing is signed: the corrected total is
+// returned so the customer can confirm it, then the browser calls again with that total.
 import { CHECKOUT_URL, MERCHANT_ID, SANDBOX, adminDb, checkoutHash, formatAmount, isConfigured } from './_payhere.js';
+import { buildCatalogue, priceOrder } from './_pricing.js';
+
+const ORDER_ID = /^ord-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!isConfigured()) return res.status(500).json({ error: 'PayHere is not configured on the server' });
+  if (!isConfigured()) return res.status(500).json({ error: 'Online payment is not available right now' });
 
-  const orderId = req.body?.orderId;
-  if (typeof orderId !== 'string' || !orderId) return res.status(400).json({ error: 'orderId is required' });
+  const { orderId, expectedTotal } = req.body ?? {};
+  if (typeof orderId !== 'string' || !ORDER_ID.test(orderId)) return res.status(400).json({ error: 'Invalid order' });
 
-  const { data: order, error } = await adminDb().from('orders').select('*').eq('id', orderId).maybeSingle();
-  if (error) return res.status(500).json({ error: error.message });
+  const db = adminDb();
+  const [{ data: order, error }, { data: rows, error: settingsError }] = await Promise.all([
+    db.from('orders').select('*').eq('id', orderId).maybeSingle(),
+    db.from('site_settings').select('key, value').in('key', ['price_matrix', 'settings', 'products']),
+  ]);
+  if (error || settingsError) {
+    console.error('payhere-checkout: database error', (error || settingsError).message);
+    return res.status(500).json({ error: 'Could not load the order' });
+  }
   if (!order) return res.status(404).json({ error: 'Order not found' });
   if (order.payment_method !== 'payhere') return res.status(400).json({ error: 'Order is not a PayHere order' });
   if (order.payment_status === 'paid') return res.status(409).json({ error: 'Order is already paid' });
 
+  let priced;
+  try {
+    priced = priceOrder(order.items, order.delivery_method, buildCatalogue(rows ?? []));
+  } catch (e) {
+    console.warn('payhere-checkout: order cannot be priced', order.order_number, e.message);
+    return res.status(422).json({ error: 'Some items in this order need a price confirmed by our staff' });
+  }
+  const amount = formatAmount(priced.total);
+
+  // Saved total (written by the browser) differs from the server price: correct it and keep a record.
+  if (formatAmount(order.total) !== amount) {
+    console.warn('payhere-checkout: PRICE MISMATCH', order.order_number, 'client', order.total, 'server', priced.total);
+    const [{ error: updateError }] = await Promise.all([
+      db
+        .from('orders')
+        .update({
+          subtotal: priced.subtotal,
+          delivery_fee: priced.deliveryFee,
+          addon_total: priced.addonTotal,
+          total: priced.total,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', order.id)
+        .neq('payment_status', 'paid'),
+      db
+        .from('price_mismatches')
+        .insert({ order_number: order.order_number, client_total: order.total, server_total: priced.total })
+        .then((r) => (r.error && console.error('payhere-checkout: could not log mismatch', r.error.message), r)),
+    ]);
+    if (updateError) {
+      console.error('payhere-checkout: could not correct total', order.order_number, updateError.message);
+      return res.status(500).json({ error: 'Could not update the order total' });
+    }
+  }
+
+  // Never charge an amount the customer has not seen and confirmed.
+  if (typeof expectedTotal !== 'number' || formatAmount(expectedTotal) !== amount) {
+    return res.status(200).json({ priceChanged: true, ...priced });
+  }
+
   const origin = `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
-  const amount = formatAmount(order.total);
   const currency = 'LKR';
   const [firstName, ...rest] = order.customer_name.trim().split(/\s+/);
 

@@ -82,13 +82,18 @@ export interface Product {
 }
 
 // How this product's courier fee is worked out. Quantities are printed pieces (e.g. 1000 cards).
-export interface ProductDeliveryConfig {
+export interface DeliveryRates {
   mode: 'flat' | 'exact_qty' | 'range_tiers';
   flatFee: number;
   flatPerUnit?: boolean; // flat fee × packages ordered, instead of once per cart line
   exactQtyRates: { qty: number; fee: number }[]; // fee per package of exactly `qty` pieces
   rangeTiers: { minQty: number; maxQty: number; fee: number }[];
+}
+
+export interface ProductDeliveryConfig extends DeliveryRates {
   fallbackFee?: number; // no rate/tier matches; unset = store fallback fee
+  hasSizeSpecificFees?: boolean;
+  variantDeliveryConfigs?: Record<string, DeliveryRates>; // keyed by paper size ("A4", "A5"); a size without one uses the rates above
 }
 
 export interface CartItemOption {

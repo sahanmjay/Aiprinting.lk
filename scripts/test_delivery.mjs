@@ -57,4 +57,29 @@ assert.match(validateDeliveryConfig({ ...books, rangeTiers: [{ minQty: 10, maxQt
 assert.match(validateDeliveryConfig({ ...cards, exactQtyRates: [{ qty: 100, fee: 1 }, { qty: 100, fee: 2 }] }), /listed twice/);
 assert.match(validateDeliveryConfig({ ...flat, flatFee: -1 }), /negative/);
 
+// Size-specific fees: A4 and A5 of one product, size found by the selected option id
+const sizeGroup = { values: [{ id: 'a4', label: 'A4 (210 × 297 mm)' }, { id: 'a5', label: 'A5 · 120gsm Art Paper' }, { id: 'dl', label: 'DL' }] };
+const bySize = {
+  ...cards,
+  hasSizeSpecificFees: true,
+  variantDeliveryConfigs: {
+    A5: { ...cards, exactQtyRates: [{ qty: 1000, fee: 400 }] },
+    A4: { ...books, rangeTiers: [{ minQty: 1, maxQty: 10, fee: 500 }] },
+  },
+};
+const sized = (config, valueId, quantityCount, quantity = 1) => ({
+  quantity,
+  quantityCount,
+  product: { deliveryConfig: config, optionGroups: [sizeGroup] },
+  selectedOptions: [{ valueId }],
+});
+assert.equal(itemFee(sized(bySize, 'a5', 1000), BASE), 400);
+assert.equal(itemFee(sized(bySize, 'a4', 10), BASE), 500);
+assert.equal(itemFee(sized(bySize, 'a4', 1000), BASE), 400); // no A4 tier for 1000 = fallback
+assert.equal(itemFee(sized(bySize, 'dl', 1000), BASE), 600); // no size = product rates
+assert.equal(itemFee(sized({ ...bySize, hasSizeSpecificFees: false }, 'a5', 1000), BASE), 600); // switched off
+assert.equal(charge('courier', [sized(bySize, 'a4', 10), sized(bySize, 'a5', 1000)], BASE), 500 + 0);
+assert.match(validateDeliveryConfig({ ...bySize, variantDeliveryConfigs: { A4: { ...flat, flatFee: -1 } } }), /^A4: .*negative/);
+assert.equal(validateDeliveryConfig({ ...bySize, hasSizeSpecificFees: false, variantDeliveryConfigs: { A4: { ...flat, flatFee: -1 } } }), null);
+
 console.log('All delivery tests passed.');

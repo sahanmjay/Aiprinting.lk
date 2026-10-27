@@ -23,6 +23,7 @@ import {
 import { generateOrderNumber, generateQuoteNumber } from '../lib/formatters';
 import { supabase, toRow, fromRow } from '../lib/supabase';
 import { calculateTotalItemQuantity, calculateDeliveryCharge } from '../lib/delivery';
+import { mergeProducts, withDefaults, SavedProducts } from '../lib/pricing';
 
 interface StoreContextType {
   products: Product[];
@@ -119,25 +120,6 @@ function save(key: string, value: unknown) {
     console.warn(`Could not save ${key} to localStorage`, e);
   }
 }
-
-// Saved copies from before a field existed get the default for it.
-const withDefaults = (saved: Partial<SiteSettings>): SiteSettings => ({
-  ...DEFAULT_SITE_SETTINGS,
-  ...saved,
-  bankDetails: { ...DEFAULT_SITE_SETTINGS.bankDetails, ...saved.bankDetails },
-  socialLinks: { ...DEFAULT_SITE_SETTINGS.socialLinks, ...saved.socialLinks },
-  clientLogos: saved.clientLogos && saved.clientLogos.length > 0 ? saved.clientLogos : DEFAULT_SITE_SETTINGS.clientLogos,
-  heroBackgrounds: { ...DEFAULT_SITE_SETTINGS.heroBackgrounds, ...saved.heroBackgrounds },
-  categoryImages: { ...(DEFAULT_SITE_SETTINGS.categoryImages ?? {}), ...(saved.categoryImages ?? {}) },
-});
-
-// Staff's saved product list wins; built-in products added later (never saved or deleted by staff) are appended.
-// ponytail: later edits to a built-in product that staff already saved don't reach visitors; per-field merge if needed.
-type SavedProducts = { list: Product[]; removed: string[] };
-const mergeProducts = ({ list, removed }: SavedProducts): Product[] => [
-  ...list,
-  ...SEED_PRODUCTS.filter((p) => !removed.includes(p.id) && !list.some((x) => x.id === p.id)),
-];
 
 // Supabase Auth needs an email, so admin usernames map to an internal address (no mail is ever sent).
 const ADMIN_EMAIL_DOMAIN = 'admin.aiprintingsolutions.com';

@@ -43,12 +43,13 @@ import {
 import { useStore } from '../context/StoreContext';
 import { formatLKR, formatItemPrice, getWhatsAppUrl } from '../lib/formatters';
 import { useSalesBillPrint } from '../components/common/SalesBillDocument';
-import { calculateDeliveryCharge, calculateTotalItemQuantity, parseQuantityLabel, validateDeliveryConfig } from '../lib/delivery';
+import { calculateDeliveryCharge, calculateTotalItemQuantity, parseQuantityLabel, productSizes, validateDeliveryConfig } from '../lib/delivery';
+import { priceOrder } from '../lib/pricing';
 import { openStoredFile, downloadStoredFile, uploadImage, deleteUploadedImage, IMAGE_GUIDE } from '../lib/supabase';
 import { HERO_SLIDES } from '../components/home/HeroShowcase';
 import { DEFAULT_SITE_SETTINGS } from '../data/seedData';
 import { tableOptionGroups, optionId, finishOf } from '../data/priceTables';
-import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product, SiteSettings, SocialLinks, OptionValue, DeliveryMethod, DeliveryCombineMode, PromoSettings, ProductDeliveryConfig } from '../types';
+import { OrderStatus, PaymentStatus, QuoteStatus, Order, Product, SiteSettings, SocialLinks, OptionValue, DeliveryMethod, DeliveryCombineMode, PromoSettings, ProductDeliveryConfig, DeliveryRates } from '../types';
 
 const MAX_PRODUCT_PHOTOS = 4;
 
@@ -75,13 +76,15 @@ const UploadButton: React.FC<{ busy: boolean; label: string; onFile: (file: File
   </label>
 );
 
-// Per-product delivery fee: store base fee, flat, exact quantity rates, or min–max ranges
+// Per-product delivery fee: store base fee, flat, exact quantity rates, or min–max ranges — optionally separate per paper size
 const DeliveryConfigEditor: React.FC<{
   value?: ProductDeliveryConfig;
   onChange: (config?: ProductDeliveryConfig) => void;
   quantities: number[]; // this product's quantity options, to pre-fill exact rates
+  sizes: string[]; // this product's paper sizes ("A4", "A5"); 2+ offers size-specific fees
   baseFee: number;
-}> = ({ value, onChange, quantities, baseFee }) => {
+}> = ({ value, onChange, quantities, sizes, baseFee }) => {
+  const [tab, setTab] = useState(sizes[0]);
   const num = (s: string) => Math.max(0, parseFloat(s) || 0);
   const field = 'w-24 p-1.5 font-bold text-slate-800 bg-white border border-[#E6E0D6] rounded';
   const removeBtn = (onClick: () => void) => (
@@ -89,19 +92,39 @@ const DeliveryConfigEditor: React.FC<{
       <Trash2 className="w-4 h-4" />
     </button>
   );
-  const setMode = (mode: string) =>
-    onChange(
-      mode
-        ? {
-            flatFee: baseFee,
-            exactQtyRates: quantities.map((qty) => ({ qty, fee: baseFee })),
-            rangeTiers: [{ minQty: 1, maxQty: 10, fee: baseFee }],
-            ...value,
-            mode: mode as ProductDeliveryConfig['mode'],
-          }
-        : undefined
-    );
   const edit = (patch: Partial<ProductDeliveryConfig>) => value && onChange({ ...value, ...patch });
+
+  const bySize = !!value?.hasSizeSpecificFees && sizes.length > 1;
+  const size = sizes.includes(tab) ? tab : sizes[0];
+  // The rates being edited: the selected size's when fees differ by size, else the product's
+  const rates: DeliveryRates | undefined = bySize ? (value?.variantDeliveryConfigs?.[size] ?? value) : value;
+  const editRates = (patch: Partial<DeliveryRates>) => {
+    if (!value || !rates) return;
+    if (!bySize) return edit(patch);
+    const { mode, flatFee, flatPerUnit, exactQtyRates, rangeTiers } = rates;
+    edit({ variantDeliveryConfigs: { ...value.variantDeliveryConfigs, [size]: { mode, flatFee, flatPerUnit, exactQtyRates, rangeTiers, ...patch } } });
+  };
+  const setMode = (mode: string) => {
+    if (!mode) return onChange(undefined);
+    if (value) return editRates({ mode: mode as DeliveryRates['mode'] });
+    onChange({
+      flatFee: baseFee,
+      exactQtyRates: quantities.map((qty) => ({ qty, fee: baseFee })),
+      rangeTiers: [{ minQty: 1, maxQty: 10, fee: baseFee }],
+      mode: mode as DeliveryRates['mode'],
+    });
+  };
+  const setBySize = (on: boolean) => {
+    if (!value) return;
+    const { mode, flatFee, flatPerUnit, exactQtyRates, rangeTiers } = value;
+    edit({
+      hasSizeSpecificFees: on,
+      // each size starts from the product's rates; turning it off keeps them for next time
+      variantDeliveryConfigs: Object.fromEntries(
+        sizes.map((s) => [s, value.variantDeliveryConfigs?.[s] ?? { mode, flatFee, flatPerUnit, exactQtyRates, rangeTiers }])
+      ),
+    });
+  };
 
   return (
     <div className="p-3.5 bg-[#FAF8F5] rounded border border-[#E6E0D6] space-y-3 text-xs">
@@ -110,49 +133,80 @@ const DeliveryConfigEditor: React.FC<{
           <Truck className="w-4 h-4 text-[#D6342C]" />
           Delivery Fee:
         </label>
-        <select value={value?.mode ?? ''} onChange={(e) => setMode(e.target.value)} className="p-1.5 bg-white border border-[#E6E0D6] rounded">
-          <option value="">Store base fee ({formatLKR(baseFee)})</option>
-          <option value="flat">Flat / fixed fee</option>
-          <option value="exact_qty">By exact quantity</option>
-          <option value="range_tiers">By quantity range (min–max)</option>
-        </select>
+        {value && sizes.length > 1 && (
+          <label className="flex items-center gap-1.5 ml-auto order-last">
+            <input type="checkbox" checked={bySize} onChange={(e) => setBySize(e.target.checked)} />
+            Different fee per size ({sizes.join(' / ')})
+          </label>
+        )}
       </div>
 
-      {value?.mode === 'flat' && (
+      {bySize && (
+        <div className="flex gap-1 border-b border-[#E6E0D6]" role="tablist">
+          {sizes.map((s) => (
+            <button
+              key={s}
+              type="button"
+              role="tab"
+              aria-selected={s === size}
+              onClick={() => setTab(s)}
+              className={`px-3 py-1.5 font-bold rounded-t border border-b-0 ${
+                s === size ? 'bg-white border-[#E6E0D6] text-[#0F1B2D]' : 'border-transparent text-slate-500 hover:text-[#0F1B2D]'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <select
+        value={rates?.mode ?? ''}
+        onChange={(e) => setMode(e.target.value)}
+        aria-label={bySize ? `Delivery fee for ${size}` : 'Delivery fee'}
+        className="p-1.5 bg-white border border-[#E6E0D6] rounded"
+      >
+        {!bySize && <option value="">Store base fee ({formatLKR(baseFee)})</option>}
+        <option value="flat">Flat / fixed fee</option>
+        <option value="exact_qty">By exact quantity</option>
+        <option value="range_tiers">By quantity range (min–max)</option>
+      </select>
+
+      {rates?.mode === 'flat' && (
         <div className="flex flex-wrap items-center gap-3">
           <span className="flex items-center gap-1">
-            Rs. <input type="number" min="0" value={value.flatFee} onChange={(e) => edit({ flatFee: num(e.target.value) })} className={field} />
+            Rs. <input type="number" min="0" value={rates.flatFee} onChange={(e) => editRates({ flatFee: num(e.target.value) })} className={field} />
           </span>
           <label className="flex items-center gap-1.5">
-            <input type="checkbox" checked={!!value.flatPerUnit} onChange={(e) => edit({ flatPerUnit: e.target.checked })} />
+            <input type="checkbox" checked={!!rates.flatPerUnit} onChange={(e) => editRates({ flatPerUnit: e.target.checked })} />
             Multiply by packages ordered
           </label>
         </div>
       )}
 
-      {value?.mode === 'exact_qty' && (
+      {rates?.mode === 'exact_qty' && (
         <div className="space-y-1.5">
           <div className="grid grid-cols-[6rem_6rem_2rem] gap-2 font-bold text-[10px] uppercase text-slate-500">
             <span>Quantity</span>
             <span>Fee (LKR)</span>
           </div>
-          {value.exactQtyRates.map((r, i) => (
+          {rates.exactQtyRates.map((r, i) => (
             <div key={i} className="grid grid-cols-[6rem_6rem_2rem] gap-2 items-center">
-              <input type="number" min="1" value={r.qty} onChange={(e) => edit({ exactQtyRates: value.exactQtyRates.map((x, j) => (j === i ? { ...x, qty: num(e.target.value) } : x)) })} className={field} />
-              <input type="number" min="0" value={r.fee} onChange={(e) => edit({ exactQtyRates: value.exactQtyRates.map((x, j) => (j === i ? { ...x, fee: num(e.target.value) } : x)) })} className={field} />
-              {removeBtn(() => edit({ exactQtyRates: value.exactQtyRates.filter((_, j) => j !== i) }))}
+              <input type="number" min="1" value={r.qty} onChange={(e) => editRates({ exactQtyRates: rates.exactQtyRates.map((x, j) => (j === i ? { ...x, qty: num(e.target.value) } : x)) })} className={field} />
+              <input type="number" min="0" value={r.fee} onChange={(e) => editRates({ exactQtyRates: rates.exactQtyRates.map((x, j) => (j === i ? { ...x, fee: num(e.target.value) } : x)) })} className={field} />
+              {removeBtn(() => editRates({ exactQtyRates: rates.exactQtyRates.filter((_, j) => j !== i) }))}
             </div>
           ))}
           <div className="flex gap-2">
-            <button type="button" onClick={() => edit({ exactQtyRates: [...value.exactQtyRates, { qty: 0, fee: baseFee }] })} className="font-bold text-[#0F1B2D] hover:underline">
+            <button type="button" onClick={() => editRates({ exactQtyRates: [...rates.exactQtyRates, { qty: 0, fee: baseFee }] })} className="font-bold text-[#0F1B2D] hover:underline">
               + Add quantity
             </button>
             {quantities.length > 0 && (
               <button
                 type="button"
                 onClick={() =>
-                  edit({
-                    exactQtyRates: quantities.map((qty) => value.exactQtyRates.find((r) => r.qty === qty) ?? { qty, fee: baseFee }),
+                  editRates({
+                    exactQtyRates: quantities.map((qty) => rates.exactQtyRates.find((r) => r.qty === qty) ?? { qty, fee: baseFee }),
                   })
                 }
                 className="font-bold text-[#0F1B2D] hover:underline"
@@ -164,14 +218,14 @@ const DeliveryConfigEditor: React.FC<{
         </div>
       )}
 
-      {value?.mode === 'range_tiers' && (
+      {rates?.mode === 'range_tiers' && (
         <div className="space-y-1.5">
           <div className="grid grid-cols-[6rem_6rem_6rem_2rem] gap-2 font-bold text-[10px] uppercase text-slate-500">
             <span>Min Qty</span>
             <span>Max Qty</span>
             <span>Fee (LKR)</span>
           </div>
-          {value.rangeTiers.map((t, i) => (
+          {rates.rangeTiers.map((t, i) => (
             <div key={i} className="grid grid-cols-[6rem_6rem_6rem_2rem] gap-2 items-center">
               {(['minQty', 'maxQty', 'fee'] as const).map((k) => (
                 <input
@@ -179,19 +233,19 @@ const DeliveryConfigEditor: React.FC<{
                   type="number"
                   min={k === 'fee' ? 0 : 1}
                   value={t[k]}
-                  onChange={(e) => edit({ rangeTiers: value.rangeTiers.map((x, j) => (j === i ? { ...x, [k]: num(e.target.value) } : x)) })}
+                  onChange={(e) => editRates({ rangeTiers: rates.rangeTiers.map((x, j) => (j === i ? { ...x, [k]: num(e.target.value) } : x)) })}
                   className={field}
                 />
               ))}
-              {removeBtn(() => edit({ rangeTiers: value.rangeTiers.filter((_, j) => j !== i) }))}
+              {removeBtn(() => editRates({ rangeTiers: rates.rangeTiers.filter((_, j) => j !== i) }))}
             </div>
           ))}
           <button
             type="button"
             onClick={() => {
-              const last = value.rangeTiers[value.rangeTiers.length - 1];
+              const last = rates.rangeTiers[rates.rangeTiers.length - 1];
               const min = last ? last.maxQty + 1 : 1;
-              edit({ rangeTiers: [...value.rangeTiers, { minQty: min, maxQty: min + 9, fee: baseFee }] });
+              editRates({ rangeTiers: [...rates.rangeTiers, { minQty: min, maxQty: min + 9, fee: baseFee }] });
             }}
             className="font-bold text-[#0F1B2D] hover:underline"
           >
@@ -200,7 +254,7 @@ const DeliveryConfigEditor: React.FC<{
         </div>
       )}
 
-      {(value?.mode === 'exact_qty' || value?.mode === 'range_tiers') && (
+      {value && (bySize || value.mode === 'exact_qty' || value.mode === 'range_tiers') && (
         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#E6E0D6]">
           <span>No match fee: Rs.</span>
           <input
@@ -211,7 +265,7 @@ const DeliveryConfigEditor: React.FC<{
             onChange={(e) => edit({ fallbackFee: e.target.value === '' ? undefined : num(e.target.value) })}
             className={field}
           />
-          <span className="text-[11px] text-slate-500">Blank = store base fee</span>
+          <span className="text-[11px] text-slate-500">Blank = store base fee{bySize ? ' · shared by all sizes' : ''}</span>
         </div>
       )}
       <p className="text-[11px] text-slate-500">
@@ -1905,6 +1959,31 @@ export const AdminPage: React.FC = () => {
                       <span>Delivery Charge: <strong>{selectedOrder.deliveryMethod === 'pickup' ? 'Rs. 0.00 (Customer Pickup - Free)' : formatLKR(selectedOrder.deliveryFee)}</strong></span>
                       <span>Final Order Total: <strong className="text-[#D6342C]">{formatLKR(selectedOrder.total)}</strong></span>
                     </div>
+                    {/* The browser writes the order total; re-price it with current prices so tampering is visible */}
+                    {selectedOrder.paymentStatus !== 'paid' &&
+                      (() => {
+                        let check: number | string;
+                        try {
+                          check = priceOrder(selectedOrder.items, selectedOrder.deliveryMethod ?? 'delivery', {
+                            products,
+                            priceMatrix,
+                            settings: siteSettings,
+                          }).total;
+                        } catch (e) {
+                          check = e instanceof Error ? e.message : 'cannot be priced';
+                        }
+                        if (check === selectedOrder.total) return null;
+                        return (
+                          <div className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-300 rounded text-amber-900 text-[11px]">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            <span>
+                              {typeof check === 'number'
+                                ? `Current prices give ${formatLKR(check)}, not ${formatLKR(selectedOrder.total)}. Check the total before accepting payment.`
+                                : `Could not re-price this order (${check}). Check the total before accepting payment.`}
+                            </span>
+                          </div>
+                        );
+                      })()}
                   </div>
                   {selectedOrder.bankSlipUrl && (
                     <div className="flex items-center gap-3">
@@ -3315,6 +3394,7 @@ export const AdminPage: React.FC = () => {
                     value={productForm.deliveryConfig}
                     onChange={(deliveryConfig) => setProductForm((f) => ({ ...f, deliveryConfig }))}
                     quantities={[...new Set((editingProduct?.optionGroups?.[1]?.values ?? []).map((v) => parseQuantityLabel(v.label)))]}
+                    sizes={editingProduct ? productSizes(editingProduct) : []}
                     baseFee={siteSettings.deliveryFee}
                   />
 

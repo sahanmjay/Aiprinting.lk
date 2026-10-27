@@ -18,9 +18,10 @@ import { uploadFile } from '../lib/supabase';
 import { formatLKR, formatItemPrice, isValidSriLankanPhone } from '../lib/formatters';
 import { SRI_LANKA_DISTRICTS } from '../data/seedData';
 import { PaymentMethod } from '../types';
+import type { PricedOrder } from '../lib/pricing';
 
 export const CheckoutPage: React.FC = () => {
-  const { cart, cartSubtotal, cartTotal, siteSettings, createOrder, customer, deliveryMethod, setDeliveryMethod, cartTotalQuantity, cartDeliveryFee } = useStore();
+  const { cart, cartSubtotal, cartTotal, siteSettings, createOrder, updateOrder, customer, deliveryMethod, setDeliveryMethod, cartTotalQuantity, cartDeliveryFee } = useStore();
   const navigate = useNavigate();
 
   // Form Fields
@@ -94,12 +95,13 @@ export const CheckoutPage: React.FC = () => {
     return Object.keys(errs).length === 0;
   };
 
-  // The server signs the payment (merchant secret never reaches the browser), then we POST to PayHere.
-  const redirectToPayHere = async (orderId: string) => {
+  // The server re-prices the order and signs the payment (merchant secret never reaches the browser),
+  // then we POST to PayHere. It only signs the total the customer has seen.
+  const redirectToPayHere = async (orderId: string, expectedTotal: number) => {
     const res = await fetch('/api/payhere-checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId }),
+      body: JSON.stringify({ orderId, expectedTotal }),
     });
     if (!res.ok) {
       // The order is saved; send the customer to it so they can pay another way.
@@ -107,7 +109,20 @@ export const CheckoutPage: React.FC = () => {
       navigate(`/order-confirmation/${orderId}`);
       return;
     }
-    const { action, fields } = (await res.json()) as { action: string; fields: Record<string, string> };
+    const data = (await res.json()) as PricedOrder & { priceChanged?: boolean; action: string; fields: Record<string, string> };
+    if (data.priceChanged) {
+      // Keep this browser's copy of the order in step with the corrected total (the server already saved it)
+      const { subtotal, deliveryFee, addonTotal, total } = data;
+      updateOrder(orderId, { subtotal, deliveryFee, addonTotal, total });
+      const ok = window.confirm(
+        `Price updated to ${formatLKR(data.total)} (you saw ${formatLKR(expectedTotal)}), using our current prices.\n\nPay ${formatLKR(data.total)} with PayHere now?`
+      );
+      if (ok) return redirectToPayHere(orderId, data.total);
+      alert(`Your order is saved with the updated total of ${formatLKR(data.total)}. You can pay by bank transfer or contact us.`);
+      navigate(`/order-confirmation/${orderId}`);
+      return;
+    }
+    const { action, fields } = data;
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = action;
@@ -161,7 +176,7 @@ export const CheckoutPage: React.FC = () => {
       });
 
       if (paymentMethod === 'payhere') {
-        await redirectToPayHere(order.id);
+        await redirectToPayHere(order.id, cartTotal);
         return; // browser is leaving for PayHere
       }
       navigate(`/order-confirmation/${order.id}`);
