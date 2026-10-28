@@ -117,8 +117,6 @@ export const Footer: React.FC = () => {
                 <Link to="/quote" className="hover:text-white underline">Custom Quote</Link>
                 <span>·</span>
                 <Link to="/faq" className="hover:text-white underline">FAQ</Link>
-                <span>·</span>
-                <Link to="/admin" className="hover:text-white underline text-slate-500">Staff Portal</Link>
               </li>
             </ul>
           </div>

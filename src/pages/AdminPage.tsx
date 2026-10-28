@@ -40,7 +40,7 @@ import {
   Check,
   X,
 } from 'lucide-react';
-import { useStore } from '../context/StoreContext';
+import { useStore, type AdminMfa } from '../context/StoreContext';
 import { formatLKR, formatItemPrice, getWhatsAppUrl } from '../lib/formatters';
 import { useSalesBillPrint } from '../components/common/SalesBillDocument';
 import { calculateDeliveryCharge, calculateTotalItemQuantity, parseQuantityLabel, productSizes, validateDeliveryConfig } from '../lib/delivery';
@@ -303,6 +303,8 @@ export const AdminPage: React.FC = () => {
     priceMatrix,
     isAdminLoggedIn,
     loginAdmin,
+    startAdminMfa,
+    verifyAdminMfa,
     logoutAdmin,
     updateOrder,
     updateQuoteStatus,
@@ -326,10 +328,15 @@ export const AdminPage: React.FC = () => {
   } = useStore();
 
   // Authentication State
-  const [usernameInput, setUsernameInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
+  const [codeInput, setCodeInput] = useState('');
+  const [mfa, setMfa] = useState<AdminMfa | null>(null); // set after the password step
   const [authError, setAuthError] = useState<string | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  // ponytail: in-memory cooldown, a reload resets it; Supabase Auth rate limits are the real guard.
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Active Admin Tab
@@ -646,8 +653,27 @@ export const AdminPage: React.FC = () => {
   };
 
   if (!isAdminLoggedIn) {
+    const inputClass = 'w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden';
+
+    // Runs one login step; 5 failures in a row lock the form for 5 minutes.
+    const attempt = async (step: () => Promise<string | null>) => {
+      if (Date.now() < lockedUntil) {
+        setAuthError(`Too many attempts. Try again in ${Math.ceil((lockedUntil - Date.now()) / 60_000)} min.`);
+        return;
+      }
+      setIsSigningIn(true);
+      const error = await step().catch(() => 'Something went wrong. Please try again.');
+      setIsSigningIn(false);
+      setAuthError(error);
+      if (!error) return setFailedAttempts(0);
+      if (failedAttempts + 1 < 5) return setFailedAttempts(failedAttempts + 1);
+      setFailedAttempts(0);
+      setLockedUntil(Date.now() + 5 * 60_000);
+    };
+
     return (
       <div className="max-w-md mx-auto my-16 px-4">
+        <meta name="robots" content="noindex, nofollow" />
         <div className="bg-white p-8 rounded-lg border border-[#E6E0D6] shadow-md space-y-6 text-center">
           <div className="w-14 h-14 rounded-full bg-[#0F1B2D] text-white flex items-center justify-center mx-auto">
             <Lock className="w-6 h-6 text-[#D6342C]" />
@@ -656,62 +682,137 @@ export const AdminPage: React.FC = () => {
           <div className="space-y-1">
             <h1 className="text-2xl font-bold text-[#0F1B2D]">Staff Administration Portal</h1>
             <p className="text-xs text-slate-500">
-              Enter authorized administrator credentials to manage print orders, price grids, and catalogue.
+              {!mfa
+                ? 'Enter authorized administrator credentials to manage print orders, price grids, and catalogue.'
+                : mfa.qrCode
+                  ? 'Set up 2-step verification: scan this QR code with an authenticator app (Google Authenticator, Authy, Microsoft Authenticator), then enter the 6-digit code it shows.'
+                  : 'Enter the 6-digit code from your authenticator app.'}
             </p>
           </div>
 
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setIsSigningIn(true);
-              setAuthError(await loginAdmin(usernameInput.trim(), passwordInput));
-              setIsSigningIn(false);
-            }}
-            className="space-y-4 text-xs text-left"
-          >
-            <div className="space-y-1">
-              <label htmlFor="admin-username" className="font-bold text-slate-700">Username</label>
-              <input
-                id="admin-username"
-                type="text"
-                autoCapitalize="none"
-                spellCheck={false}
-                autoComplete="username"
-                required
-                value={usernameInput}
-                onChange={(e) => {
-                  setUsernameInput(e.target.value);
-                  setAuthError(null);
-                }}
-                className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label htmlFor="admin-password" className="font-bold text-slate-700">Password</label>
-              <input
-                id="admin-password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={passwordInput}
-                onChange={(e) => {
-                  setPasswordInput(e.target.value);
-                  setAuthError(null);
-                }}
-                className="w-full p-2.5 bg-[#FAF8F5] border border-[#E6E0D6] rounded focus:bg-white focus:outline-hidden"
-              />
-              {authError && <p role="alert" className="text-red-500 text-[11px]">{authError}</p>}
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSigningIn}
-              className="w-full py-3 bg-[#0F1B2D] hover:bg-[#182A45] text-white font-bold text-xs rounded transition-colors shadow-sm disabled:opacity-60"
+          {!mfa ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                attempt(async () => {
+                  const error = await loginAdmin(emailInput, passwordInput);
+                  if (!error) {
+                    setPasswordInput('');
+                    setMfa(await startAdminMfa());
+                  }
+                  return error;
+                });
+              }}
+              className="space-y-4 text-xs text-left"
             >
-              {isSigningIn ? 'Signing in…' : 'Sign In to Admin Portal'}
-            </button>
-          </form>
+              <div className="space-y-1">
+                <label htmlFor="admin-email" className="font-bold text-slate-700">Email</label>
+                <input
+                  id="admin-email"
+                  type="email"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  autoComplete="username"
+                  required
+                  value={emailInput}
+                  onChange={(e) => {
+                    setEmailInput(e.target.value);
+                    setAuthError(null);
+                  }}
+                  className={inputClass}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="admin-password" className="font-bold text-slate-700">Password</label>
+                <input
+                  id="admin-password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={passwordInput}
+                  onChange={(e) => {
+                    setPasswordInput(e.target.value);
+                    setAuthError(null);
+                  }}
+                  className={inputClass}
+                />
+                {authError && <p role="alert" className="text-red-500 text-[11px]">{authError}</p>}
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSigningIn}
+                className="w-full py-3 bg-[#0F1B2D] hover:bg-[#182A45] text-white font-bold text-xs rounded transition-colors shadow-sm disabled:opacity-60"
+              >
+                {isSigningIn ? 'Signing in…' : 'Sign In to Admin Portal'}
+              </button>
+            </form>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                attempt(async () => {
+                  const error = await verifyAdminMfa(mfa.factorId, codeInput);
+                  setCodeInput('');
+                  if (!error) setMfa(null); // a later sign-out starts again at the password step
+                  return error;
+                });
+              }}
+              className="space-y-4 text-xs text-left"
+            >
+              {mfa.qrCode && (
+                <div className="space-y-2 text-center">
+                  <img src={mfa.qrCode} alt="Authenticator QR code" className="w-44 h-44 mx-auto border border-[#E6E0D6] rounded" />
+                  <p className="text-[11px] text-slate-500">
+                    Can't scan? Enter this key manually:
+                    <code className="block mt-1 font-mono text-slate-700 break-all select-all">{mfa.secret}</code>
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label htmlFor="admin-code" className="font-bold text-slate-700">6-digit code</label>
+                <input
+                  id="admin-code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9 ]{6,7}"
+                  maxLength={7}
+                  required
+                  autoFocus
+                  value={codeInput}
+                  onChange={(e) => {
+                    setCodeInput(e.target.value);
+                    setAuthError(null);
+                  }}
+                  className={`${inputClass} tracking-[0.3em] text-center text-sm`}
+                />
+                {authError && <p role="alert" className="text-red-500 text-[11px]">{authError}</p>}
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSigningIn}
+                className="w-full py-3 bg-[#0F1B2D] hover:bg-[#182A45] text-white font-bold text-xs rounded transition-colors shadow-sm disabled:opacity-60"
+              >
+                {isSigningIn ? 'Verifying…' : 'Verify & Sign In'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  logoutAdmin();
+                  setMfa(null);
+                  setCodeInput('');
+                  setAuthError(null);
+                }}
+                className="w-full text-[11px] text-slate-500 hover:text-slate-700 underline"
+              >
+                Cancel and sign out
+              </button>
+            </form>
+          )}
 
           <div className="text-[11px] text-slate-400">
             Protected under internal pre-press security policies.
@@ -1438,6 +1539,7 @@ export const AdminPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+      <meta name="robots" content="noindex, nofollow" />
       {/* Top Admin Header Bar */}
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-[#0F1B2D] text-white p-4 sm:p-6 rounded-lg shadow-sm">
         <div>

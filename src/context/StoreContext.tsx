@@ -80,7 +80,9 @@ interface StoreContextType {
   deleteProduct: (productId: string) => void;
   duplicateProduct: (productId: string) => Product | undefined;
   updateSiteSettings: (newSettings: Partial<SiteSettings>) => Promise<string | null>; // null = saved for every visitor
-  loginAdmin: (username: string, password: string) => Promise<string | null>; // null = success, else error message
+  loginAdmin: (email: string, password: string) => Promise<string | null>; // null = password ok, 2-step code next
+  startAdminMfa: () => Promise<AdminMfa>; // throws on failure
+  verifyAdminMfa: (factorId: string, code: string) => Promise<string | null>; // null = signed in as admin
   logoutAdmin: () => Promise<void>;
   refreshAdminData: () => Promise<void>;
   savePriceMatrix: () => Promise<string | null>; // null = saved, else error message
@@ -121,8 +123,12 @@ function save(key: string, value: unknown) {
   }
 }
 
-// Supabase Auth needs an email, so admin usernames map to an internal address (no mail is ever sent).
-const ADMIN_EMAIL_DOMAIN = 'admin.aiprintingsolutions.com';
+// Admin 2-step login: an existing authenticator (factorId only) or a new one to scan (qrCode + secret).
+export type AdminMfa = { factorId: string; qrCode?: string; secret?: string };
+
+// Staff are signed out after this long without any activity on the site.
+const ADMIN_IDLE_MS = 30 * 60_000;
+const ADMIN_ACTIVE_KEY = 'aiprint_admin_active'; // last activity time only — never decides who is admin
 
 // Postgres unique violation — a random order/quote number collided, so retry with a new one.
 const UNIQUE_VIOLATION = '23505';
@@ -225,9 +231,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => save('aiprint_settings', siteSettings), [siteSettings]);
   useEffect(() => save(PRODUCTS_KEY, products), [products]);
 
-  // Session: any signed-in Supabase user is a customer; admins are also listed in admin_users
+  // Session: any signed-in Supabase user is a customer; admins are also listed in admin_users and
+  // must have passed the authenticator code (aal2). The database enforces the same rule in is_admin().
   useEffect(() => {
     const check = async () => {
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aal?.currentLevel !== 'aal2') return setIsAdminLoggedIn(false);
       const { data } = await supabase.rpc('is_admin');
       setIsAdminLoggedIn(data === true);
     };
@@ -314,6 +323,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     if (isAdminLoggedIn) refreshAdminData();
+  }, [isAdminLoggedIn]);
+
+  // Idle sign-out. The last-activity time is stored so a closed tab, a sleeping laptop or another tab
+  // still counts: coming back after 30 minutes signs out straight away.
+  useEffect(() => {
+    if (!isAdminLoggedIn) return;
+    let last = load(ADMIN_ACTIVE_KEY, () => Date.now());
+    const touch = () => {
+      if (Date.now() - last < 10_000) return; // throttle storage writes
+      last = Date.now();
+      save(ADMIN_ACTIVE_KEY, last);
+    };
+    const expire = () => {
+      last = Math.max(last, load(ADMIN_ACTIVE_KEY, () => last));
+      if (Date.now() - last > ADMIN_IDLE_MS) logoutAdmin();
+    };
+    expire();
+    const events = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'touchstart'];
+    events.forEach((e) => window.addEventListener(e, touch, { passive: true }));
+    const timer = setInterval(expire, 30_000);
+    return () => {
+      clearInterval(timer);
+      events.forEach((e) => window.removeEventListener(e, touch));
+    };
   }, [isAdminLoggedIn]);
 
   // Delivery Method state
@@ -654,17 +687,44 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return saveShared('settings', next);
   };
 
-  const loginAdmin = async (username: string, password: string): Promise<string | null> => {
-    const email = `${username.trim().toLowerCase()}@${ADMIN_EMAIL_DOMAIN}`;
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return error.message === 'Invalid login credentials' ? 'Wrong username or password.' : error.message;
-    const { data: isAdmin, error: rpcError } = await supabase.rpc('is_admin');
-    if (rpcError || isAdmin !== true) {
+  // Step 1: password. One generic message for every failure so the form never confirms an email or password.
+  const loginAdmin = async (email: string, password: string): Promise<string | null> => {
+    const INVALID = 'Invalid email or password.';
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    if (error || !data.user) return INVALID;
+    // is_admin() needs the 2-step code, so check the admin_users row itself (RLS shows a user only their own row)
+    const { data: row } = await supabase.from('admin_users').select('id').eq('id', data.user.id).maybeSingle();
+    if (!row) {
       await supabase.auth.signOut();
-      return rpcError
-        ? `Signed in, but the admin check failed (${rpcError.message}). Has supabase/schema.sql been run?`
-        : 'This account is not an administrator.';
+      return INVALID;
     }
+    return null;
+  };
+
+  // Step 2a: the admin's verified authenticator, or a fresh one to scan on first login.
+  const startAdminMfa = async (): Promise<AdminMfa> => {
+    const { data, error } = await supabase.auth.mfa.listFactors();
+    if (error) throw error;
+    if (data.totp[0]) return { factorId: data.totp[0].id }; // totp lists verified factors only
+    // A setup abandoned half-way leaves an unverified factor; remove it before starting again
+    for (const f of data.all) {
+      if (f.factor_type === 'totp' && f.status === 'unverified') await supabase.auth.mfa.unenroll({ factorId: f.id });
+    }
+    const { data: enrolled, error: enrollError } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Admin authenticator' });
+    if (enrollError) throw enrollError;
+    return { factorId: enrolled.id, qrCode: enrolled.totp.qr_code, secret: enrolled.totp.secret };
+  };
+
+  // Step 2b: the 6-digit code raises the session to aal2, which is what is_admin() requires.
+  const verifyAdminMfa = async (factorId: string, code: string): Promise<string | null> => {
+    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: code.replace(/\s/g, '') });
+    if (error) return 'Invalid code. Please try again.';
+    const { data: isAdmin } = await supabase.rpc('is_admin');
+    if (isAdmin !== true) {
+      await supabase.auth.signOut();
+      return 'Invalid email or password.';
+    }
+    save(ADMIN_ACTIVE_KEY, Date.now()); // a fresh login starts a fresh idle timer
     setIsAdminLoggedIn(true);
     return null;
   };
@@ -726,6 +786,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         duplicateProduct,
         updateSiteSettings,
         loginAdmin,
+        startAdminMfa,
+        verifyAdminMfa,
         logoutAdmin,
         refreshAdminData,
         savePriceMatrix,

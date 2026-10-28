@@ -278,9 +278,11 @@ ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 
 -- Admin check. SECURITY DEFINER so it can read admin_users regardless of that table's RLS.
+-- Requires 2-step verification: the session must have passed the authenticator code (aal2).
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-    SELECT EXISTS (SELECT 1 FROM public.admin_users WHERE id = auth.uid());
+    SELECT COALESCE(auth.jwt() ->> 'aal', '') = 'aal2'
+       AND EXISTS (SELECT 1 FROM public.admin_users WHERE id = auth.uid());
 $$;
 GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated;
 
@@ -377,14 +379,17 @@ CREATE POLICY "Admin can manage public assets" ON storage.objects FOR ALL TO aut
 
 -- ==============================================================================
 -- ADMIN LOGINS
--- The admin page signs in with a USERNAME. Supabase Auth needs an email, so the app turns
--- username 'x' into 'x@admin.aiprintingsolutions.com' (no mail is ever sent there).
--- To add an admin: Authentication -> Users -> Add user, email = <username>@admin.aiprintingsolutions.com,
--- tick 'Auto Confirm User', then run:
+-- The admin page signs in with email + password, then a 6-digit authenticator code (TOTP).
+-- The first login shows a QR code to set up the authenticator app.
+-- To add an admin: Authentication -> Users -> Add user (tick 'Auto Confirm User'), then run:
 --
 -- INSERT INTO public.admin_users (id, email)
--- SELECT id, email FROM auth.users WHERE email = '<username>@admin.aiprintingsolutions.com'
+-- SELECT id, email FROM auth.users WHERE email = '<email>'
 -- ON CONFLICT (id) DO NOTHING;
+-- DELETE FROM public.customers WHERE id IN (SELECT id FROM public.admin_users);
+--
+-- Deleting and re-creating an Auth user gives it a new id: run the INSERT again.
+-- Lost authenticator: Authentication -> Users -> (user) -> remove the MFA factor; the next login sets up a new one.
 -- ==============================================================================
 
 -- Incremental updates
