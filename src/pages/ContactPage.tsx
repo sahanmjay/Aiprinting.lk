@@ -55,6 +55,8 @@ export const ContactPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 sm:py-16 space-y-12">
+      <title>Contact Us | Ai Printing</title>
+      <meta name="description" content="Contact Ai Printing Solutions (Pvt) Ltd: hotline, WhatsApp, email and our Boralesgamuwa workshop address." />
       {/* Header */}
       <div className="text-center max-w-xl mx-auto space-y-3">
         <div className="text-xs font-bold uppercase tracking-widest text-[#D6342C]">
@@ -83,6 +85,7 @@ export const ContactPage: React.FC = () => {
                 </div>
                 <div>
                   <div className="font-bold text-[#0F1B2D]">Factory Location</div>
+                  <div className="text-slate-600">Ai Printing Solutions (Pvt) Ltd, trading as Ai Printing (aiprinting.lk)</div>
                   <div className="text-slate-600">{siteSettings.address}</div>
                   <div className="text-[11px] text-slate-500 mt-0.5">GPS Coords: 6.81929, 79.90051</div>
                   <a
@@ -104,6 +107,7 @@ export const ContactPage: React.FC = () => {
                   <div className="font-bold text-[#0F1B2D]">Telephone Numbers</div>
                   <div>Hotline: <a href={`tel:${siteSettings.hotline.replace(/\s+/g, '')}`} className="font-semibold text-[#0F1B2D] hover:underline">{siteSettings.hotline}</a></div>
                   <div>Landline: <a href={`tel:${siteSettings.landline.replace(/\s+/g, '')}`} className="text-slate-600 hover:underline">{siteSettings.landline}</a></div>
+                  <div>WhatsApp: <a href={getWhatsAppUrl(siteSettings.whatsapp, '')} target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:underline">{siteSettings.whatsapp}</a></div>
                 </div>
               </li>
 

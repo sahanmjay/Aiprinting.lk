@@ -20,6 +20,10 @@ const QuotePage = lazy(() => import('./pages/QuotePage').then((m) => ({ default:
 const AboutPage = lazy(() => import('./pages/AboutPage').then((m) => ({ default: m.AboutPage })));
 const FAQPage = lazy(() => import('./pages/FAQPage').then((m) => ({ default: m.FAQPage })));
 const ContactPage = lazy(() => import('./pages/ContactPage').then((m) => ({ default: m.ContactPage })));
+const TermsPage = lazy(() => import('./pages/PolicyPages').then((m) => ({ default: m.TermsPage })));
+const PrivacyPolicyPage = lazy(() => import('./pages/PolicyPages').then((m) => ({ default: m.PrivacyPolicyPage })));
+const RefundPolicyPage = lazy(() => import('./pages/PolicyPages').then((m) => ({ default: m.RefundPolicyPage })));
+const DeliveryPolicyPage = lazy(() => import('./pages/PolicyPages').then((m) => ({ default: m.DeliveryPolicyPage })));
 const AccountPage = lazy(() => import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })));
 const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
 const AdLandingPage = lazy(() => import('./pages/landing/AdLandingPage').then((m) => ({ default: m.AdLandingPage })));
@@ -45,6 +49,10 @@ export function App() {
             <Route path="about" element={<AboutPage />} />
             <Route path="faq" element={<FAQPage />} />
             <Route path="contact" element={<ContactPage />} />
+            <Route path="terms" element={<TermsPage />} />
+            <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
+            <Route path="refund-policy" element={<RefundPolicyPage />} />
+            <Route path="delivery-policy" element={<DeliveryPolicyPage />} />
             <Route path="account" element={<AccountPage />} />
             <Route path="account/orders" element={<AccountPage />} />
             <Route path="admin" element={<AdminPage />} />

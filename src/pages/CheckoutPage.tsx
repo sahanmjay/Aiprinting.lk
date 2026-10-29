@@ -663,6 +663,17 @@ export const CheckoutPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Native required: the browser blocks submit until ticked */}
+            <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
+              <input type="checkbox" required className="mt-0.5 w-4 h-4 accent-[#D6342C] shrink-0" />
+              <span>
+                I agree to the{' '}
+                <a href="/terms" target="_blank" rel="noopener" className="text-[#D6342C] font-semibold underline">Terms &amp; Conditions</a>
+                {' '}and{' '}
+                <a href="/refund-policy" target="_blank" rel="noopener" className="text-[#D6342C] font-semibold underline">Refund Policy</a>
+              </span>
+            </label>
+
             <button
               type="submit"
               disabled={isSubmitting}

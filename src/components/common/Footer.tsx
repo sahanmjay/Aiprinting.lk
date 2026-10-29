@@ -122,27 +122,35 @@ export const Footer: React.FC = () => {
           </div>
         </div>
 
+        {/* LEGAL LINKS */}
+        <nav aria-label="Legal" className="pt-6 flex flex-wrap justify-center md:justify-start gap-x-4 gap-y-1 text-[11px] text-slate-300 [&>a]:py-1.5 [&>a:hover]:text-white [&>a]:underline">
+          <Link to="/terms">Terms &amp; Conditions</Link>
+          <Link to="/privacy-policy">Privacy Policy</Link>
+          <Link to="/refund-policy">Refund Policy</Link>
+          <Link to="/delivery-policy">Delivery Policy</Link>
+          <Link to="/contact">Contact Us</Link>
+        </nav>
+
         {/* BOTTOM BAR: PAYMENT METHODS & COPYRIGHT */}
-        <div className="pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-400">
-          <div>
-            &copy; {new Date().getFullYear()} Ai Printing Solutions. All Rights Reserved. 11/A Gangarama Rd, Werahara, Boralesgamuwa.
+        <div className="pt-4 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+          <div className="text-center md:text-left">
+            &copy; {new Date().getFullYear()} Ai Printing Solutions (Pvt) Ltd, trading as Ai Printing (aiprinting.lk). All Rights Reserved.
+            <br />
+            {siteSettings.address}
           </div>
 
           {/* Payment Badges */}
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center justify-center gap-2 flex-wrap">
             <span className="text-[11px] text-slate-400 flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              Secure Payments:
+              We accept:
             </span>
-            <span className="px-2 py-0.5 rounded bg-[#182A45] text-slate-200 text-[10px] font-semibold tracking-wider">
-              PAYHERE
-            </span>
-            <span className="px-2 py-0.5 rounded bg-[#182A45] text-slate-200 text-[10px] font-semibold tracking-wider">
-              VISA / MASTERCARD
-            </span>
-            <span className="px-2 py-0.5 rounded bg-[#182A45] text-slate-200 text-[10px] font-semibold tracking-wider">
-              BANK TRANSFER
-            </span>
+            {['VISA', 'MASTERCARD', 'AMEX', 'EZ CASH', 'MCASH', 'GENIE', 'INTERNET BANKING', 'BANK TRANSFER'].map((m) => (
+              <span key={m} className="px-2 py-0.5 rounded bg-[#182A45] text-slate-200 text-[10px] font-semibold tracking-wider">
+                {m}
+              </span>
+            ))}
+            <span className="text-[10px] text-slate-500">via PayHere</span>
           </div>
         </div>
       </div>
