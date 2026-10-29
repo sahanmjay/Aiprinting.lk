@@ -307,6 +307,7 @@ export const AdminPage: React.FC = () => {
     verifyAdminMfa,
     logoutAdmin,
     updateOrder,
+    deleteOrder,
     updateQuoteStatus,
     contactMessages,
     registeredCustomers,
@@ -857,6 +858,15 @@ export const AdminPage: React.FC = () => {
         : orders.filter((o) => o.orderStatus === status).length;
 
   // One click to finish an order; offers to record the payment at the same time.
+  const removeOrder = async (o: Order) => {
+    const warning =
+      o.paymentStatus === 'paid'
+        ? `\n\nWARNING: this order is PAID (${formatLKR(o.total)}). Deleting it removes it from your records and reports.`
+        : '';
+    if (!window.confirm(`Delete order ${o.orderNumber} (${o.customerName})?${warning}\n\nThis cannot be undone.`)) return;
+    if ((await deleteOrder(o.id)) && selectedOrder?.id === o.id) setSelectedOrder(null);
+  };
+
   const completeOrder = async (o: Order) => {
     const markPaid =
       o.paymentStatus !== 'paid' &&
@@ -1950,6 +1960,14 @@ export const AdminPage: React.FC = () => {
                           className="px-2.5 py-1 bg-[#0F1B2D] text-white text-[11px] font-semibold rounded hover:bg-[#182A45]"
                         >
                           Details
+                        </button>
+                        <button
+                          onClick={() => removeOrder(o)}
+                          title="Delete this order"
+                          aria-label={`Delete order ${o.orderNumber}`}
+                          className="p-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>

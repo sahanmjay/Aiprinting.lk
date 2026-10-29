@@ -53,6 +53,7 @@ interface StoreContextType {
   // Ordering
   createOrder: (orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>) => Promise<Order>;
   updateOrder: (orderId: string, changes: Partial<Order>) => Promise<void>;
+  deleteOrder: (orderId: string) => Promise<boolean>; // admin only; true = deleted
   getOrderById: (orderId: string) => Order | undefined;
   trackOrder: (orderNumber: string, phone: string) => Promise<Order | null>;
 
@@ -455,6 +456,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setCustomerOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...patch } : o)));
   };
 
+  const deleteOrder = async (orderId: string): Promise<boolean> => {
+    // RLS turns a refused delete into "0 rows", not an error, so ask for the deleted row back
+    const { data, error } = await supabase.from('orders').delete().eq('id', orderId).select('id');
+    if (error || !data?.length) {
+      alert(`Could not delete order: ${error?.message ?? 'not allowed — please sign in again'}`);
+      return false;
+    }
+    setAdminOrders((prev) => prev.filter((o) => o.id !== orderId));
+    setOrders((prev) => prev.filter((o) => o.id !== orderId));
+    setCustomerOrders((prev) => prev.filter((o) => o.id !== orderId));
+    return true;
+  };
+
   const getOrderById = (orderId: string) => orders.find((o) => o.id === orderId);
 
   const trackOrder = async (orderNumber: string, phone: string): Promise<Order | null> => {
@@ -785,6 +799,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         deleteProduct,
         duplicateProduct,
         updateSiteSettings,
+        deleteOrder,
         loginAdmin,
         startAdminMfa,
         verifyAdminMfa,

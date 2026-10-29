@@ -45,6 +45,16 @@ export const CheckoutPage: React.FC = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Placing the order empties the cart while the browser is still on its way to PayHere
+  if (cart.length === 0 && isSubmitting) {
+    return (
+      <div className="max-w-xl mx-auto py-20 px-4 text-center space-y-2">
+        <h2 className="text-xl font-bold text-[#0F1B2D]">Taking you to secure payment…</h2>
+        <p className="text-xs text-slate-500">Please do not close or refresh this page.</p>
+      </div>
+    );
+  }
+
   // If cart is empty, redirect
   if (cart.length === 0) {
     return (
