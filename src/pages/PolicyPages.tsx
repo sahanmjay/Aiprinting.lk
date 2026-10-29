@@ -5,14 +5,14 @@ import { useStore } from '../context/StoreContext';
 const LAST_UPDATED = '29 October 2026';
 const LEGAL_NAME = 'Ai Printing Solutions (Pvt) Ltd';
 
-const Policy: React.FC<{ title: string; description: string; children: React.ReactNode }> = ({ title, description, children }) => (
+const Policy: React.FC<{ title: string; description: string; updated?: string; children: React.ReactNode }> = ({ title, description, updated = LAST_UPDATED, children }) => (
   <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
     <title>{`${title} | Ai Printing`}</title>
     <meta name="description" content={description} />
     <div className="border-b border-[#E6E0D6] pb-4 mb-8">
       <div className="text-xs font-bold uppercase tracking-widest text-[#D6342C]">Legal</div>
       <h1 className="text-2xl sm:text-3xl font-bold text-[#0F1B2D]">{title}</h1>
-      <p className="text-xs text-slate-500 mt-1">Last updated: {LAST_UPDATED}</p>
+      <p className="text-xs text-slate-500 mt-1">Last updated: {updated}</p>
     </div>
     <div className="space-y-6 text-sm text-slate-700 leading-relaxed [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-[#0F1B2D] [&_h2]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1 [&_a]:text-[#D6342C] [&_a]:font-semibold [&_a:hover]:underline">
       {children}
@@ -169,61 +169,97 @@ export const PrivacyPolicyPage: React.FC = () => (
   </Policy>
 );
 
-export const RefundPolicyPage: React.FC = () => (
-  <Policy title="Refund, Return & Cancellation Policy" description="Ai Printing refund, return and cancellation policy: free cancellation before production, free reprint or full refund when the fault is ours.">
-    <section>
-      <p>
-        Every order from Ai Printing is custom printed for you. This policy explains when you can cancel, when you are
-        entitled to a reprint or refund, and how refunds are paid.
-      </p>
-    </section>
-    <section>
-      <h2>1. Cancellation</h2>
-      <ul>
-        <li>You can cancel free of charge at any time <strong>before production starts</strong>, and you will receive a full refund.</li>
-        <li>To cancel, contact us by phone, WhatsApp or email with your order number.</li>
-        <li>Once production has started, the order can no longer be cancelled.</li>
-      </ul>
-    </section>
-    <section>
-      <h2>2. Change of mind</h2>
-      <p>
-        Because printed items are made to your design, they are not refundable or returnable for a change of mind once
-        production has started. This includes errors in artwork or text that you supplied or approved in a proof.
-      </p>
-    </section>
-    <section>
-      <h2>3. Our guarantee: when the fault is ours</h2>
-      <p>If the fault is ours, we will reprint your order free of charge or give you a 100% refund. This covers:</p>
-      <ul>
-        <li>print defects;</li>
-        <li>the wrong paper stock, size or finish compared with your order;</li>
-        <li>damage in transit.</li>
-      </ul>
-    </section>
-    <section>
-      <h2>4. How to report a problem</h2>
-      <ul>
-        <li>Report the problem within <strong>7 days of delivery</strong> (or pickup).</li>
-        <li>Send your order number and clear photos of the problem, and of the packaging if it arrived damaged.</li>
-        <li>We may ask you to keep or return the items so we can check them.</li>
-      </ul>
-    </section>
-    <section>
-      <h2>5. How refunds are paid</h2>
-      <ul>
-        <li>Refunds are made to the original payment method within 7–14 business days of approval.</li>
-        <li>Card and wallet payments made through PayHere are refunded to the same card or account.</li>
-        <li>Bank transfer payments are refunded to your bank account. We will ask you for the account details.</li>
-        <li>All refunds are made in Sri Lankan Rupees (LKR).</li>
-      </ul>
-    </section>
-    <section>
-      <h2>6. Contact</h2>
-      <ContactBlock />
-    </section>
-  </Policy>
-);
+export const RefundPolicyPage: React.FC = () => {
+  const { siteSettings } = useStore();
+  return (
+    <Policy
+      title="Return & Refund Policy"
+      updated="June 2026"
+      description="Ai Printing Solutions return and refund policy for custom printed products: defects, incorrect orders, how to report a problem and how refunds are paid."
+    >
+      <section>
+        <h2>Introduction</h2>
+        <p>
+          At Ai Printing Solutions, we strive to deliver high-quality printed products that meet our customers'
+          expectations. As most of our products are custom-made and produced according to customer-supplied artwork and
+          specifications, our return policy is as follows.
+        </p>
+      </section>
+      <section>
+        <h2>1. Customized Products</h2>
+        <p>
+          All products printed using customer-provided artwork, designs, text, images, specifications, or personalized
+          information are considered custom-made products. Due to the customized nature of these products, we do not
+          accept returns, exchanges, or cancellations after production has commenced.
+        </p>
+      </section>
+      <section>
+        <h2>2. Defective or Incorrect Products</h2>
+        <p>We will gladly replace or refund an order if:</p>
+        <ul>
+          <li>the product contains a manufacturing defect;</li>
+          <li>the product differs significantly from the approved artwork or order specifications;</li>
+          <li>the wrong product was delivered due to our error;</li>
+          <li>the quantity delivered is substantially lower than the quantity ordered.</li>
+        </ul>
+        <p>Claims must be submitted within 7 days of receiving the order.</p>
+      </section>
+      <section>
+        <h2>3. How to Report a Problem</h2>
+        <p>Contact us within 7 days of delivery and provide:</p>
+        <ul>
+          <li>your order number;</li>
+          <li>clear photographs showing the issue;</li>
+          <li>a detailed description of the problem.</li>
+        </ul>
+        <p>Our quality team will review the claim and respond within 3 business days.</p>
+      </section>
+      <section>
+        <h2>4. Color Variations</h2>
+        <p>
+          Minor color variations may occur between on-screen previews and printed products due to differences in monitor
+          displays, printing processes, paper materials, and finishing methods. Such variations are considered normal
+          industry tolerances and do not qualify for refunds or returns.
+        </p>
+      </section>
+      <section>
+        <h2>5. Customer Artwork Errors</h2>
+        <p>Customers are responsible for reviewing and approving their artwork before production. We are not responsible for:</p>
+        <ul>
+          <li>spelling or grammatical errors;</li>
+          <li>design mistakes in submitted artwork;</li>
+          <li>low-resolution images;</li>
+          <li>incorrect dimensions or specifications supplied by the customer;</li>
+          <li>errors visible in approved proofs.</li>
+        </ul>
+        <p>These issues do not qualify for returns, refunds, or reprints.</p>
+      </section>
+      <section>
+        <h2>6. Refunds</h2>
+        <p>
+          If a refund is approved, it will be processed using the original payment method whenever possible. Processing
+          times may vary depending on the payment provider. Shipping or delivery charges are non-refundable unless the
+          error was caused by us.
+        </p>
+      </section>
+      <section>
+        <h2>7. Replacement Orders</h2>
+        <p>Where appropriate, we may choose to reprint and replace the affected products instead of issuing a refund.</p>
+      </section>
+      <section>
+        <h2>8. Contact Information</h2>
+        <p className="font-bold text-[#0F1B2D]">Ai Printing Solutions</p>
+        <ul>
+          <li>Website: <a href="https://www.aiprinting.lk">www.aiprinting.lk</a></li>
+          <li>Email: <a href={`mailto:${siteSettings.email}`}>{siteSettings.email}</a></li>
+          <li>Mobile: <a href={`tel:${siteSettings.hotline.replace(/\s+/g, '')}`}>{siteSettings.hotline}</a></li>
+          <li>Office: <a href={`tel:${siteSettings.landline.replace(/\s+/g, '')}`}>{siteSettings.landline}</a></li>
+          <li>Address: No. 11/A, Gangarama Road, Werahera, Boralesgamuwa, Sri Lanka</li>
+        </ul>
+      </section>
+    </Policy>
+  );
+};
 
 export const DeliveryPolicyPage: React.FC = () => (
   <Policy title="Delivery & Shipping Policy" description="Ai Printing delivery policy: island-wide courier to all 25 districts of Sri Lanka, usually 1–2 business days after production, or free pickup in Boralesgamuwa.">
