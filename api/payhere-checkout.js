@@ -2,14 +2,18 @@
 // The order is re-priced here from the saved catalogue (api/_pricing.js); browser prices are never trusted.
 // If the server price differs from the total the customer saw, nothing is signed: the corrected total is
 // returned so the customer can confirm it, then the browser calls again with that total.
-import { CHECKOUT_URL, MERCHANT_ID, SANDBOX, adminDb, checkoutHash, formatAmount, isConfigured } from './_payhere.js';
+import { CHECKOUT_URL, MERCHANT_ID, adminDb, checkoutHash, formatAmount, isConfigured, siteOrigin } from './_payhere.js';
 import { buildCatalogue, priceOrder } from './_pricing.js';
 
 const ORDER_ID = /^ord-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!isConfigured()) return res.status(500).json({ error: 'Online payment is not available right now' });
+  const origin = siteOrigin(req);
+  if (!isConfigured() || !origin) {
+    console.error('payhere-checkout: PAYHERE_MODE, merchant credentials or SITE_URL not set correctly');
+    return res.status(500).json({ error: 'Payment temporarily unavailable' });
+  }
 
   const { orderId, expectedTotal } = req.body ?? {};
   if (typeof orderId !== 'string' || !ORDER_ID.test(orderId)) return res.status(400).json({ error: 'Invalid order' });
@@ -67,13 +71,12 @@ export default async function handler(req, res) {
     return res.status(200).json({ priceChanged: true, ...priced });
   }
 
-  const origin = `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
   const currency = 'LKR';
   const [firstName, ...rest] = order.customer_name.trim().split(/\s+/);
 
+  // action is the live or sandbox PayHere URL; the browser just posts the form there, so the mode is server-only.
   res.status(200).json({
     action: CHECKOUT_URL,
-    sandbox: SANDBOX,
     fields: {
       merchant_id: MERCHANT_ID,
       return_url: `${origin}/order-confirmation/${order.id}?payment=return`,

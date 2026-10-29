@@ -5,13 +5,24 @@ import { createClient } from '@supabase/supabase-js';
 // Trimmed: a stray space/newline pasted into Vercel silently breaks the hash ("Unauthorized payment request").
 const env = (name) => (process.env[name] || '').trim();
 
-export const SANDBOX = env('PAYHERE_SANDBOX').toLowerCase() === 'true';
+// The mode comes ONLY from PAYHERE_MODE. Missing or unknown = no payments at all, never a silent fallback.
+const CHECKOUT_URLS = {
+  live: 'https://www.payhere.lk/pay/checkout',
+  sandbox: 'https://sandbox.payhere.lk/pay/checkout',
+};
+const MODE = env('PAYHERE_MODE').toLowerCase();
+export const CHECKOUT_URL = Object.hasOwn(CHECKOUT_URLS, MODE) ? CHECKOUT_URLS[MODE] : '';
 export const MERCHANT_ID = env('PAYHERE_MERCHANT_ID');
 const MERCHANT_SECRET = env('PAYHERE_MERCHANT_SECRET');
+const SITE_URL = env('SITE_URL').replace(/\/+$/, '');
 
-export const CHECKOUT_URL = SANDBOX
-  ? 'https://sandbox.payhere.lk/pay/checkout'
-  : 'https://www.payhere.lk/pay/checkout';
+// Base for return/cancel/notify URLs. Live: only the fixed SITE_URL (the final, non-redirecting https
+// domain, since PayHere does not follow redirects on its notify POST), never the request's Host header.
+// Sandbox falls back to the request host so preview deployments can be tested. '' = not configured.
+export function siteOrigin(req) {
+  if (/^https:\/\/[^/\s]+$/.test(SITE_URL)) return SITE_URL;
+  return MODE === 'sandbox' ? `https://${req.headers['x-forwarded-host'] || req.headers.host}` : '';
+}
 
 const md5Upper = (s) => createHash('md5').update(s).digest('hex').toUpperCase();
 
@@ -29,7 +40,7 @@ export function notifySignature({ merchant_id, order_id, payhere_amount, payhere
 }
 
 export const isConfigured = () =>
-  Boolean(MERCHANT_ID && MERCHANT_SECRET && env('SUPABASE_SERVICE_ROLE_KEY'));
+  Boolean(CHECKOUT_URL && MERCHANT_ID && MERCHANT_SECRET && env('SUPABASE_SERVICE_ROLE_KEY'));
 
 // Service-role client: bypasses RLS, so it must only ever run on the server.
 export const adminDb = () =>
