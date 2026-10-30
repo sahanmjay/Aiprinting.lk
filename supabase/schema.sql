@@ -110,6 +110,8 @@ CREATE TABLE IF NOT EXISTS public.orders (
     order_status TEXT NOT NULL DEFAULT 'new' CHECK (order_status IN ('new', 'confirmed', 'in_production', 'ready', 'delivered', 'cancelled')),
     bank_slip_url TEXT,
     special_instructions TEXT,
+    confirmation_email_sent_at TIMESTAMP WITH TIME ZONE, -- order email sent (claimed once by the API)
+    verified_email_sent_at TIMESTAMP WITH TIME ZONE, -- bank payment verified email sent
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );

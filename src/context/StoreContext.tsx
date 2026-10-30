@@ -451,6 +451,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       alert(`Could not update order: ${error.message}`);
       return;
     }
+    // Admin marked it paid: the server checks it is a bank transfer and emails the customer once.
+    if (changes.paymentStatus === 'paid') {
+      supabase.auth.getSession().then(({ data }) =>
+        fetch('/api/admin/verify-payment-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session?.access_token ?? ''}` },
+          body: JSON.stringify({ orderId }),
+        })
+      ).catch((e) => console.error('Payment verified email failed:', e));
+    }
     setAdminOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...patch } : o)));
     setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...patch } : o)));
     setCustomerOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...patch } : o)));

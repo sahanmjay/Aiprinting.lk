@@ -189,6 +189,13 @@ export const CheckoutPage: React.FC = () => {
         await redirectToPayHere(order.id, cartTotal);
         return; // browser is leaving for PayHere
       }
+      // Server re-reads the order and sends the bank-transfer email once; never blocks the order.
+      fetch('/api/order-created', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_number: order.orderNumber, phone: order.customerPhone }),
+        keepalive: true,
+      }).catch(() => {});
       navigate(`/order-confirmation/${order.id}`);
     } catch (err) {
       console.error('Failed to submit order:', err);

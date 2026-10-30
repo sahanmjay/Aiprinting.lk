@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Search, ChevronRight, AlertCircle, LogIn, UserPlus, LogOut, KeyRound, CheckCircle2, User } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatLKR, formatItemPrice } from '../lib/formatters';
@@ -271,7 +271,8 @@ const SetNewPassword: React.FC = () => {
 
 export const AccountPage: React.FC = () => {
   const { orders, trackOrder, customer, customerOrders, isPasswordRecovery, signOutCustomer } = useStore();
-  const [searchQuery, setSearchQuery] = useState('');
+  // Order emails link here with ?order=<order number>
+  const [searchQuery, setSearchQuery] = useState(useSearchParams()[0].get('order') ?? '');
   const [phoneQuery, setPhoneQuery] = useState('');
   const [searchedOrder, setSearchedOrder] = useState<Order | null>(null);
   const [hasSearched, setHasSearched] = useState(false);

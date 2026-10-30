@@ -2,6 +2,7 @@
 // gets marked paid: the md5sig proves the message came from PayHere with our merchant secret.
 import { timingSafeEqual } from 'node:crypto';
 import { MERCHANT_ID, adminDb, formatAmount, isConfigured, notifySignature } from './_payhere.js';
+import { customerAndAdmin, emailOnce } from './_lib/email.js';
 
 // PayHere status_code -> our payment_status
 const STATUS = { '2': 'paid', '0': 'pending', '-1': 'failed', '-2': 'failed', '-3': 'failed' };
@@ -38,7 +39,7 @@ export default async function handler(req, res) {
 
   const { data: order, error: orderError } = await db
     .from('orders')
-    .select('id,total,payment_status')
+    .select('*')
     .eq('order_number', n.order_id)
     .maybeSingle();
   if (orderError) return fail(res, 'read order', orderError);
@@ -52,11 +53,12 @@ export default async function handler(req, res) {
   }
 
   // Never change an order that is already paid, even if a later cancelled/failed notification arrives.
-  const { error: updateError } = await db
+  const { data: updated, error: updateError } = await db
     .from('orders')
     .update({ payment_status: paymentStatus, updated_at: new Date().toISOString() })
     .eq('id', order.id)
-    .neq('payment_status', 'paid');
+    .neq('payment_status', 'paid')
+    .select('id');
   if (updateError) return fail(res, 'update order', updateError);
 
   const { error: eventError } = await db.from('payment_events').insert({
@@ -69,6 +71,11 @@ export default async function handler(req, res) {
   });
   // 23505 = a parallel retry recorded it first; the update above is idempotent, so that is fine.
   if (eventError && eventError.code !== '23505') return fail(res, 'record event', eventError);
+
+  // Only the notification that turned the order paid sends; emailOnce also blocks parallel retries. Never fails the 200.
+  if (paymentStatus === 'paid' && updated?.length) {
+    await emailOnce(order, 'confirmation_email_sent_at', customerAndAdmin({ ...order, payment_status: 'paid' }, 'payhere_paid'));
+  }
 
   res.status(200).end();
 }
